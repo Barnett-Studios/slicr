@@ -1,16 +1,16 @@
-# planner
+# slicr
 
-[![CI](https://github.com/Barnett-Studios/planner/actions/workflows/ci.yml/badge.svg)](https://github.com/Barnett-Studios/planner/actions/workflows/ci.yml)
+[![CI](https://github.com/Barnett-Studios/slicr/actions/workflows/ci.yml/badge.svg)](https://github.com/Barnett-Studios/slicr/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
 **Decompose a task into a granular, RED-gated execution-manifest — the producer half of the
-plan→execute seam.** A capable model plans; cheaper executors run the nodes. planner's job is the
+plan→execute seam.** A capable model plans; cheaper executors run the nodes. slicr's job is the
 decomposition and the contract it hands down: single-region nodes, each with a discriminating
 acceptance test authored up front.
 
 > Part of the Barnett Studios agentic-harness toolkit → cxpak · commitward · abproof · cascadr ·
-> cordon · corpus · **planner** · …
+> cordon · corpus · **slicr** · …
 
 ## What's here
 
@@ -22,7 +22,7 @@ acceptance test authored up front.
   (14 tests).
 
 The planning *procedure* itself — how you prompt a model to produce the manifest, and how you
-validate the plan before decomposing it — lives in your harness as a skill or prompt. planner owns
+validate the plan before decomposing it — lives in your harness as a skill or prompt. slicr owns
 only the deterministic producer/validator and the schema contract. See [`CONTRACT.md`](CONTRACT.md).
 
 ## Use
@@ -61,4 +61,4 @@ toolkit: [cxpak](https://github.com/Barnett-Studios/cxpak) ·
 [commitward](https://github.com/Barnett-Studios/commitward) ·
 [cascadr](https://github.com/Barnett-Studios/cascadr) ·
 [abproof](https://github.com/Barnett-Studios/abproof) ·
-[cordon](https://github.com/Barnett-Studios/cordon) · **planner**.
+[cordon](https://github.com/Barnett-Studios/cordon) · **slicr**.

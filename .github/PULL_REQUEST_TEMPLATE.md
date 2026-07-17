@@ -1,5 +1,5 @@
 <!--
-Thanks for contributing to planner! Keep the PR focused and fill in the sections
+Thanks for contributing to slicr! Keep the PR focused and fill in the sections
 below. The checklist mirrors the CI gates — a box you can't tick is a signal to
 fix before requesting review, not to hide.
 -->

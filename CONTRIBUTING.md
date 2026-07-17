@@ -1,6 +1,6 @@
-# Contributing to planner
+# Contributing to slicr
 
-Thanks for your interest in planner — a granular, RED-gated execution-manifest producer. It is one component of the
+Thanks for your interest in slicr — a granular, RED-gated execution-manifest producer. It is one component of the
 [Barnett Studios agentic-harness toolkit](https://github.com/Barnett-Studios). This guide
 covers setup, the quality bar every change has to clear, and the conventions that keep the
 project consistent.
@@ -20,8 +20,8 @@ Participation is governed by our [Code of Conduct](CODE_OF_CONDUCT.md).
 ## Development setup
 
 ```bash
-git clone https://github.com/Barnett-Studios/planner
-cd planner
+git clone https://github.com/Barnett-Studios/slicr
+cd slicr
 pip install ruff pytest jsonschema
 ```
 
@@ -56,7 +56,7 @@ series reviews far better than one giant commit.
 
 ## The contract is the product
 
-planner is defined by its [`CONTRACT.md`](CONTRACT.md): the interface, the invariants, and the
+slicr is defined by its [`CONTRACT.md`](CONTRACT.md): the interface, the invariants, and the
 guarantees other components rely on. A change that alters observable behavior updates the
 contract **in the same PR**. Swappability is the point — don't break the socket.
 
@@ -73,10 +73,10 @@ contract **in the same PR**. Swappability is the point — don't break the socke
 
 Please **don't** open a public issue for a security vulnerability. See
 [SECURITY.md](SECURITY.md) — report it privately via GitHub's
-[security advisory](https://github.com/Barnett-Studios/planner/security/advisories/new) form so it can be
+[security advisory](https://github.com/Barnett-Studios/slicr/security/advisories/new) form so it can be
 fixed before disclosure.
 
 ---
 
 Questions that don't fit an issue? Open a
-[discussion](https://github.com/Barnett-Studios/planner/discussions). Thanks for contributing.
+[discussion](https://github.com/Barnett-Studios/slicr/discussions). Thanks for contributing.

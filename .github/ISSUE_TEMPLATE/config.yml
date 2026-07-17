@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question or discussion
-    url: https://github.com/Barnett-Studios/planner/discussions
+    url: https://github.com/Barnett-Studios/slicr/discussions
     about: Usage questions, ideas, and open-ended discussion — not bug reports.
   - name: Report a security vulnerability
-    url: https://github.com/Barnett-Studios/planner/security/advisories/new
+    url: https://github.com/Barnett-Studios/slicr/security/advisories/new
     about: Report privately so it can be fixed before disclosure. Do not open a public issue.

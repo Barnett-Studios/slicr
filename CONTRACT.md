@@ -1,7 +1,7 @@
-# planner — Contract
+# slicr — Contract
 
-The **Planner** component: decompose a task into a granular, RED-gated **execution-manifest** — the
-producer half of the plan→execute seam. planner *owns* the manifest schema; an executor (and any
+The **Slicr** component: decompose a task into a granular, RED-gated **execution-manifest** — the
+producer half of the plan→execute seam. slicr *owns* the manifest schema; an executor (and any
 orchestrator around it) consume it. Output contract, not a runtime: `plan → execution-manifest (JSON)`.
 
 ## The execution-manifest schema (the owned contract)
@@ -34,7 +34,7 @@ Per entry:
 A `local: true` node fills **one function body / one contiguous edit**, with a discriminating `accept`
 (a RED test) **authored and committed up front** — never let the executor author its own test.
 Single-region nodes land near-perfectly vs a ~40% ceiling when a node bundles impl + test. Mark a
-task `local: false` only when genuinely cross-cutting/risky. This is the planner's core judgment; the
+task `local: false` only when genuinely cross-cutting/risky. This is the slicr's core judgment; the
 planning procedure — how you prompt for and validate the plan — lives in your harness (ideally with
 plan-validation on a fresh, separate context, not the author).
 
@@ -54,6 +54,6 @@ good/bad case (including the type cases); the unknown-key case is the one delibe
 
 ## Swap-in
 
-Any planner that emits a conforming `execution-manifest` (validated by the schema) drops into the
+Any slicr that emits a conforming `execution-manifest` (validated by the schema) drops into the
 seam. The stable surface is the JSON Schema + the fail-open extraction semantics + the RED-gated,
 single-region node discipline — not any particular planning prose or procedure.

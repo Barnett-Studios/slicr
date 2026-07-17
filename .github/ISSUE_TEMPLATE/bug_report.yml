@@ -1,5 +1,5 @@
 name: Bug report
-description: Something planner did wrong — a crash, a wrong result, or unexpected behavior.
+description: Something slicr did wrong — a crash, a wrong result, or unexpected behavior.
 labels: ["bug"]
 body:
   - type: markdown
@@ -8,7 +8,7 @@ body:
         Thanks for the report. A minimal reproduction is the single most useful
         thing you can provide — it turns hours of guessing into minutes of fixing.
         For security vulnerabilities, do **not** file here — use a private
-        [security advisory](https://github.com/Barnett-Studios/planner/security/advisories/new).
+        [security advisory](https://github.com/Barnett-Studios/slicr/security/advisories/new).
   - type: textarea
     id: what-happened
     attributes:
@@ -28,14 +28,14 @@ body:
   - type: input
     id: version
     attributes:
-      label: planner version
+      label: slicr version
       description: The released version or the commit SHA you built from.
     validations:
       required: true
   - type: dropdown
     id: install
     attributes:
-      label: How did you install planner?
+      label: How did you install slicr?
       options:
         - pip / pipx
         - Cloned from source

@@ -1,4 +1,4 @@
-# planner is a reference script + JSON Schema, not a distributed package — this file
+# slicr is a reference script + JSON Schema, not a distributed package — this file
 # carries tool configuration (ruff) so the lint/format gate is reproducible.
 
 [tool.ruff]

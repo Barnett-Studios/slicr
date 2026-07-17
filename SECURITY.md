@@ -6,13 +6,13 @@
 discussions, or pull requests.**
 
 Report them privately through GitHub's
-[security advisory form](https://github.com/Barnett-Studios/planner/security/advisories/new).
+[security advisory form](https://github.com/Barnett-Studios/slicr/security/advisories/new).
 This lets us investigate and ship a fix before the issue is public.
 
 Please include:
 
 - a description of the vulnerability and its impact,
-- the `planner` version and how it was built or installed,
+- the `slicr` version and how it was built or installed,
 - steps to reproduce, ideally a minimal proof of concept.
 
 We aim to acknowledge a report within a few days and will keep you updated as we
@@ -32,7 +32,7 @@ the latest release to stay covered.
 
 ## Scope
 
-`planner` is a component of the [Barnett Studios agentic-harness
+`slicr` is a component of the [Barnett Studios agentic-harness
 toolkit](https://github.com/Barnett-Studios). It runs locally as part of a
 developer/CI workflow. Reports about the component mishandling untrusted input
 (a crafted repository, manifest, diff, or config it is pointed at) are in scope.
