@@ -1,0 +1,23 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Actions pinned to commit SHAs (never @vN — tags are mutable). No Dependabot.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: install test deps
+        run: python3 -m pip install --quiet pytest jsonschema
+      - name: test (validator + schema consistency)
+        run: python3 -m pytest test_plan_to_nodes.py test_schema.py -q

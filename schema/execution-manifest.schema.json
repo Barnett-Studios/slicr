@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://barnett.studio/schemas/execution-manifest.schema.json",
+  "title": "execution-manifest",
+  "description": "The Planner's output contract: a plan embeds one fenced JSON block {\"execution-manifest\": [entry, ...]}. The reference producer/validator is plan_to_nodes.py; the Executor consumes the local:true entries as RED-gated nodes.",
+  "type": "object",
+  "required": ["execution-manifest"],
+  "properties": {
+    "execution-manifest": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["id", "files", "change", "accept"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Node id; becomes the NN-<id>.json filename."
+        },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Editable files the node may change (relative paths)."
+        },
+        "change": {
+          "type": "string",
+          "description": "The task description shown to the executing model."
+        },
+        "accept": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Shell command; exit 0 iff the node is solved (the RED oracle)."
+        },
+        "kind": {
+          "enum": ["edit", "create"],
+          "default": "edit",
+          "description": "edit an existing region, or create a new single file."
+        },
+        "forbid": {
+          "type": "array",
+          "items": { "enum": ["new_deps"] },
+          "uniqueItems": true,
+          "description": "Constraints the change must not violate."
+        },
+        "local": {
+          "type": "boolean",
+          "default": false,
+          "description": "Offload to the local cascade. Only local:true entries become nodes; local:false is executed by the lead model."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "create" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": { "files": { "maxItems": 1 } }
+          }
+        }
+      ]
+    }
+  }
+}
