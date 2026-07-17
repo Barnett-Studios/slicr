@@ -45,9 +45,12 @@ manifest from a plan, validates every entry, and emits `NN-<id>.json` for the `l
 order. **Fail-open:** a missing/malformed manifest emits nothing and the loop falls back to plain lead
 execution (exit 0, 0 nodes); a *structurally bad* manifest is a hard `FAILURE(bad_manifest)` (exit 1).
 
-The reference validator is **lenient on unknown entry keys** (ignores them); the schema is strict
+The reference validator enforces the schema's **type** rules too (`id`/`accept` non-empty strings,
+`change` a string, `files` items strings, `local` a boolean) — so a manifest the validator accepts is
+never rejected by an independent schema-validating consumer on a type mismatch. The **sole** remaining
+divergence is unknown entry keys: the validator ignores them, the schema is strict
 (`additionalProperties: false` on entries). `test_schema.py` proves the two agree on every shared
-good/bad case.
+good/bad case (including the type cases); the unknown-key case is the one deliberately not exercised.
 
 ## Swap-in
 

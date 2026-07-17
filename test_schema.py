@@ -53,6 +53,15 @@ BAD_CASES = [
                            "accept": "true", "kind": "create", "local": True}]),
     ("missing_required", [{"id": "x", "files": ["a.py"], "local": True}]),
     ("empty_files", [{"id": "x", "files": [], "change": "c", "accept": "true"}]),
+    # Type-strictness cases — the validator was tightened to match the schema on these
+    # so a manifest the reference validator accepts is never rejected by an independent
+    # schema-validating consumer (and vice versa). Only unknown-key leniency diverges.
+    ("empty_id", [{"id": "", "files": ["a.py"], "change": "c", "accept": "true"}]),
+    ("empty_accept", [{"id": "x", "files": ["a.py"], "change": "c", "accept": ""}]),
+    ("non_bool_local", [{"id": "x", "files": ["a.py"], "change": "c", "accept": "true",
+                         "local": "yes"}]),
+    ("non_string_file_item", [{"id": "x", "files": [1, 2], "change": "c", "accept": "true"}]),
+    ("non_string_change", [{"id": "x", "files": ["a.py"], "change": 5, "accept": "true"}]),
 ]
 
 

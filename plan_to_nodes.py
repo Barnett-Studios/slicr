@@ -29,8 +29,21 @@ def validate_entry(e, idx):
     for key in ("id", "files", "change", "accept"):
         if key not in e:
             raise ValueError(f"entry {idx}: missing required key '{key}'")
+    # Type checks — kept in lockstep with execution-manifest.schema.json so the
+    # reference validator and the formal schema agree (the only intentional
+    # divergence is unknown-key leniency; the schema is strict there, this is not).
+    if not isinstance(e["id"], str) or not e["id"]:
+        raise ValueError(f"entry {idx}: 'id' must be a non-empty string")
+    if not isinstance(e["change"], str):
+        raise ValueError(f"entry {idx} ({e['id']}): 'change' must be a string")
+    if not isinstance(e["accept"], str) or not e["accept"]:
+        raise ValueError(f"entry {idx} ({e['id']}): 'accept' must be a non-empty string")
     if not isinstance(e["files"], list) or not e["files"]:
         raise ValueError(f"entry {idx} ({e['id']}): 'files' must be a non-empty list")
+    if not all(isinstance(f, str) for f in e["files"]):
+        raise ValueError(f"entry {idx} ({e['id']}): 'files' entries must all be strings")
+    if "local" in e and not isinstance(e["local"], bool):
+        raise ValueError(f"entry {idx} ({e['id']}): 'local' must be a boolean")
     kind = e.get("kind", "edit")
     if kind not in ALLOWED_KIND:
         raise ValueError(f"entry {idx} ({e['id']}): kind '{kind}' not in {sorted(ALLOWED_KIND)}")
