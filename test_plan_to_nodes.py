@@ -1,8 +1,13 @@
 # test_plan_to_nodes.py
-import importlib.util, pathlib, json
+import importlib.util
+import json
+import pathlib
+
 spec = importlib.util.spec_from_file_location(
-    "plan_to_nodes", pathlib.Path(__file__).parent / "plan_to_nodes.py")
-ptn = importlib.util.module_from_spec(spec); spec.loader.exec_module(ptn)
+    "plan_to_nodes", pathlib.Path(__file__).parent / "plan_to_nodes.py"
+)
+ptn = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ptn)
 import pytest
 
 PLAN = """# Some Plan
@@ -29,13 +34,16 @@ Prose here.
 More prose.
 """
 
+
 def test_extracts_three_entries():
     assert len(ptn.extract_manifest(PLAN)) == 3
+
 
 def test_no_manifest_returns_empty():
     assert ptn.extract_manifest("# Plain plan, no manifest") == []
 
-PLAN_WITH_CODE = '''# Plan with language-tagged code blocks before the manifest
+
+PLAN_WITH_CODE = """# Plan with language-tagged code blocks before the manifest
 ```python
 def f():
     return 1
@@ -50,15 +58,18 @@ More prose.
   {"id": "a", "files": ["x.py"], "change": "c", "accept": "true", "local": true}
 ]}
 ```
-'''
+"""
+
 
 def test_extracts_manifest_after_language_tagged_blocks():
     # Regression: ```python / ```sh blocks before ```json must not desync fence pairing.
     m = ptn.extract_manifest(PLAN_WITH_CODE)
     assert len(m) == 1 and m[0]["id"] == "a"
 
+
 def test_non_manifest_json_block_ignored():
     assert ptn.extract_manifest('```json\n{"foo": 1}\n```') == []
+
 
 def test_emits_only_local_nodes_in_order(tmp_path):
     written = ptn.emit(ptn.extract_manifest(PLAN), tmp_path)
@@ -69,17 +80,36 @@ def test_emits_only_local_nodes_in_order(tmp_path):
     assert "local" not in edit
     assert "kind" not in edit  # edit is default, omitted
 
+
 def test_unknown_forbid_token_rejected(tmp_path):
-    bad = [{"id": "x", "files": ["a.py"], "change": "c", "accept": "true",
-            "forbid": ["network"], "local": True}]
+    bad = [
+        {
+            "id": "x",
+            "files": ["a.py"],
+            "change": "c",
+            "accept": "true",
+            "forbid": ["network"],
+            "local": True,
+        }
+    ]
     with pytest.raises(ValueError):
         ptn.emit(bad, tmp_path)
 
+
 def test_create_must_be_single_file(tmp_path):
-    bad = [{"id": "x", "files": ["a.py", "b.py"], "change": "c",
-            "accept": "true", "kind": "create", "local": True}]
+    bad = [
+        {
+            "id": "x",
+            "files": ["a.py", "b.py"],
+            "change": "c",
+            "accept": "true",
+            "kind": "create",
+            "local": True,
+        }
+    ]
     with pytest.raises(ValueError):
         ptn.emit(bad, tmp_path)
+
 
 def test_missing_required_key_rejected(tmp_path):
     bad = [{"id": "x", "files": ["a.py"], "local": True}]  # no change/accept

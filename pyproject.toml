@@ -1,0 +1,15 @@
+# planner is a reference script + JSON Schema, not a distributed package — this file
+# carries tool configuration (ruff) so the lint/format gate is reproducible.
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# The test files bootstrap the module under test via importlib before importing
+# pytest — an intentional load-then-import order that trips E402, and the
+# exec_module one-liner that trips E702.
+"test_*.py" = ["E402", "E702"]

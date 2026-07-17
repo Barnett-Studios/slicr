@@ -17,7 +17,11 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
-      - name: install test deps
-        run: python3 -m pip install --quiet pytest jsonschema
+      - name: install deps
+        run: python3 -m pip install --quiet ruff pytest jsonschema
+      - name: lint
+        run: ruff check .
+      - name: format check
+        run: ruff format --check .
       - name: test (validator + schema consistency)
         run: python3 -m pytest test_plan_to_nodes.py test_schema.py -q

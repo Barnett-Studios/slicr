@@ -2,7 +2,10 @@
 """plan_to_nodes.py — extract the execution-manifest from a plan file and emit
 node JSON for run_nodes.py. Deterministic, zero-token. Missing/malformed
 manifest -> emit nothing (graceful fallback to plain Opus execution)."""
-import json, re, sys
+
+import json
+import re
+import sys
 from pathlib import Path
 
 ALLOWED_FORBID = {"new_deps"}
@@ -14,6 +17,7 @@ ALLOWED_KIND = {"edit", "create"}
 # fence line; each block is still filtered by the json.loads + execution-manifest check below.
 FENCE_RE = re.compile(r"```[^\n]*\n(.*?)\n```", re.DOTALL)
 
+
 def extract_manifest(text):
     """Return the execution-manifest list, or [] if none found/parseable."""
     for m in FENCE_RE.finditer(text):
@@ -24,6 +28,7 @@ def extract_manifest(text):
         if isinstance(data, dict) and isinstance(data.get("execution-manifest"), list):
             return data["execution-manifest"]
     return []
+
 
 def validate_entry(e, idx):
     for key in ("id", "files", "change", "accept"):
@@ -53,14 +58,15 @@ def validate_entry(e, idx):
     if bad:
         raise ValueError(f"entry {idx} ({e['id']}): unknown forbid tokens {sorted(bad)}")
 
+
 def to_node(e):
-    node = {"id": e["id"], "files": e["files"],
-            "change": e["change"], "accept": e["accept"]}
+    node = {"id": e["id"], "files": e["files"], "change": e["change"], "accept": e["accept"]}
     if e.get("forbid"):
         node["forbid"] = e["forbid"]
     if e.get("kind", "edit") != "edit":
         node["kind"] = e["kind"]
     return node
+
 
 def emit(manifest, out_dir):
     """Validate all entries, then write NN-slug.json for local:true entries in
@@ -80,6 +86,7 @@ def emit(manifest, out_dir):
         written.append(fname)
     return written
 
+
 def main():
     if len(sys.argv) != 3:
         print("usage: plan_to_nodes.py <plan.md> <out-dir>")
@@ -96,6 +103,7 @@ def main():
         sys.exit(1)
     print(f"wrote {len(written)} node(s): {', '.join(written) or '(none local)'}")
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

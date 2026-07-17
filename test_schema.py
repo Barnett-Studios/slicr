@@ -6,6 +6,7 @@ a well-formed manifest validates under both, and each malformed case the referen
 validator rejects is also rejected by the schema. (The reference validator is
 lenient on *unknown entry keys* — it ignores them — while the schema is strict;
 that divergence is documented in CONTRACT.md and not exercised here.)"""
+
 import importlib.util
 import json
 import pathlib
@@ -38,19 +39,59 @@ def validator_ok(entries, tmp_path):
 
 
 GOOD = [
-    {"id": "compact-path", "files": ["util.py"], "change": "Implement compact_path.",
-     "accept": "true", "forbid": ["new_deps"], "local": True, "kind": "edit"},
-    {"id": "cli-entry", "files": ["cli.py"], "change": "Create cli.py main().",
-     "accept": "true", "local": True, "kind": "create"},
-    {"id": "wire-config", "files": ["config.py", "app.py"], "change": "Cross-cutting.",
-     "accept": "true", "local": False},
+    {
+        "id": "compact-path",
+        "files": ["util.py"],
+        "change": "Implement compact_path.",
+        "accept": "true",
+        "forbid": ["new_deps"],
+        "local": True,
+        "kind": "edit",
+    },
+    {
+        "id": "cli-entry",
+        "files": ["cli.py"],
+        "change": "Create cli.py main().",
+        "accept": "true",
+        "local": True,
+        "kind": "create",
+    },
+    {
+        "id": "wire-config",
+        "files": ["config.py", "app.py"],
+        "change": "Cross-cutting.",
+        "accept": "true",
+        "local": False,
+    },
 ]
 
 BAD_CASES = [
-    ("unknown_forbid", [{"id": "x", "files": ["a.py"], "change": "c", "accept": "true",
-                         "forbid": ["network"], "local": True}]),
-    ("create_multifile", [{"id": "x", "files": ["a.py", "b.py"], "change": "c",
-                           "accept": "true", "kind": "create", "local": True}]),
+    (
+        "unknown_forbid",
+        [
+            {
+                "id": "x",
+                "files": ["a.py"],
+                "change": "c",
+                "accept": "true",
+                "forbid": ["network"],
+                "local": True,
+            }
+        ],
+    ),
+    (
+        "create_multifile",
+        [
+            {
+                "id": "x",
+                "files": ["a.py", "b.py"],
+                "change": "c",
+                "accept": "true",
+                "kind": "create",
+                "local": True,
+            }
+        ],
+    ),
     ("missing_required", [{"id": "x", "files": ["a.py"], "local": True}]),
     ("empty_files", [{"id": "x", "files": [], "change": "c", "accept": "true"}]),
     # Type-strictness cases — the validator was tightened to match the schema on these
@@ -58,8 +99,10 @@ BAD_CASES = [
     # schema-validating consumer (and vice versa). Only unknown-key leniency diverges.
     ("empty_id", [{"id": "", "files": ["a.py"], "change": "c", "accept": "true"}]),
     ("empty_accept", [{"id": "x", "files": ["a.py"], "change": "c", "accept": ""}]),
-    ("non_bool_local", [{"id": "x", "files": ["a.py"], "change": "c", "accept": "true",
-                         "local": "yes"}]),
+    (
+        "non_bool_local",
+        [{"id": "x", "files": ["a.py"], "change": "c", "accept": "true", "local": "yes"}],
+    ),
     ("non_string_file_item", [{"id": "x", "files": [1, 2], "change": "c", "accept": "true"}]),
     ("non_string_change", [{"id": "x", "files": ["a.py"], "change": 5, "accept": "true"}]),
 ]
