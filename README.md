@@ -5,9 +5,9 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
 **Decompose a task into a granular, RED-gated execution-manifest — the producer half of the
-plan→execute seam.** Opus plans; the local cascade executes. The Planner's job is the decomposition
-and the contract it hands down: single-region nodes, each with a discriminating acceptance test
-authored up front.
+plan→execute seam.** A capable model plans; cheaper executors run the nodes. planner's job is the
+decomposition and the contract it hands down: single-region nodes, each with a discriminating
+acceptance test authored up front.
 
 > Part of the Barnett Studios agentic-harness toolkit → cxpak · commitward · abproof · cascadr ·
 > cordon · corpus · **planner** · …
@@ -17,13 +17,13 @@ authored up front.
 - [`schema/execution-manifest.schema.json`](schema/execution-manifest.schema.json) — the owned
   contract (JSON Schema 2020-12). This is what makes the plan→execute seam swappable.
 - [`plan_to_nodes.py`](plan_to_nodes.py) — the deterministic, zero-token reference producer/validator:
-  plan → validated `NN-<id>.json` nodes for the Executor. Fail-open on a missing/malformed manifest.
+  plan → validated `NN-<id>.json` nodes for your executor. Fail-open on a missing/malformed manifest.
 - `test_plan_to_nodes.py`, `test_schema.py` — the validator's behavior + schema↔validator consistency
   (14 tests).
 
-The planning *procedure* itself is the `code-plan` skill (and `code-validate-plan`, run on a fresh
-subagent) — those ship as Library assets and are referenced here, not duplicated. See
-[`CONTRACT.md`](CONTRACT.md).
+The planning *procedure* itself — how you prompt a model to produce the manifest, and how you
+validate the plan before decomposing it — lives in your harness as a skill or prompt. planner owns
+only the deterministic producer/validator and the schema contract. See [`CONTRACT.md`](CONTRACT.md).
 
 ## Use
 
@@ -38,8 +38,8 @@ python3 -c "import json,jsonschema; \
   jsonschema.Draft202012Validator(s).validate(json.load(open('manifest.json')))"
 ```
 
-A missing or malformed manifest is **not** an error — `plan_to_nodes.py` emits nothing and the loop
-falls back to plain lead-model execution. A *structurally bad* manifest (unknown `forbid`, a `create`
+A missing or malformed manifest is **not** an error — `plan_to_nodes.py` emits nothing and the
+executor falls back to plain single-model execution. A *structurally bad* manifest (unknown `forbid`, a `create`
 node with multiple files, a missing required key) is a hard failure.
 
 ## The discipline it encodes

@@ -1,8 +1,8 @@
 # planner — Contract
 
 The **Planner** component: decompose a task into a granular, RED-gated **execution-manifest** — the
-producer half of the plan→execute seam. The Planner *owns* the manifest schema; the Executor and
-Orchestrator consume it. Output contract, not a runtime: `plan → execution-manifest (JSON)`.
+producer half of the plan→execute seam. planner *owns* the manifest schema; an executor (and any
+orchestrator around it) consume it. Output contract, not a runtime: `plan → execution-manifest (JSON)`.
 
 ## The execution-manifest schema (the owned contract)
 
@@ -27,23 +27,23 @@ Per entry:
 | `accept` | ✓ | shell command; **exit 0 ⇔ solved** — the RED oracle, authored up front |
 | `kind` | | `edit` (default) \| `create` |
 | `forbid` | | subset of `{new_deps}` |
-| `local` | | `true` → offload to the local cascade as a node; `false` (default) → the lead model executes it |
+| `local` | | `true` → offload to an executor as a node; `false` (default) → executed inline by the planning model |
 
 ## Granularity discipline (why single-region nodes)
 
 A `local: true` node fills **one function body / one contiguous edit**, with a discriminating `accept`
 (a RED test) **authored and committed up front** — never let the executor author its own test.
 Single-region nodes land near-perfectly vs a ~40% ceiling when a node bundles impl + test. Mark a
-task `local: false` only when genuinely cross-cutting/risky. This is the Planner's core judgment; the
-reference planning procedure is the `code-plan` skill (validated by `code-validate-plan` on a fresh
-subagent, not the author).
+task `local: false` only when genuinely cross-cutting/risky. This is the planner's core judgment; the
+planning procedure — how you prompt for and validate the plan — lives in your harness (ideally with
+plan-validation on a fresh, separate context, not the author).
 
 ## Reference producer / validator
 
 [`plan_to_nodes.py`](plan_to_nodes.py) is the deterministic, zero-token bridge: it extracts the
 manifest from a plan, validates every entry, and emits `NN-<id>.json` for the `local:true` entries in
-order. **Fail-open:** a missing/malformed manifest emits nothing and the loop falls back to plain lead
-execution (exit 0, 0 nodes); a *structurally bad* manifest is a hard `FAILURE(bad_manifest)` (exit 1).
+order. **Fail-open:** a missing/malformed manifest emits nothing and the executor falls back to plain
+single-model execution (exit 0, 0 nodes); a *structurally bad* manifest is a hard `FAILURE(bad_manifest)` (exit 1).
 
 The reference validator enforces the schema's **type** rules too (`id`/`accept` non-empty strings,
 `change` a string, `files` items strings, `local` a boolean) — so a manifest the validator accepts is
@@ -56,4 +56,4 @@ good/bad case (including the type cases); the unknown-key case is the one delibe
 
 Any planner that emits a conforming `execution-manifest` (validated by the schema) drops into the
 seam. The stable surface is the JSON Schema + the fail-open extraction semantics + the RED-gated,
-single-region node discipline — not the `code-plan` prose, which is one reference procedure.
+single-region node discipline — not any particular planning prose or procedure.

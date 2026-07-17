@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://barnett.studio/schemas/execution-manifest.schema.json",
   "title": "execution-manifest",
-  "description": "The Planner's output contract: a plan embeds one fenced JSON block {\"execution-manifest\": [entry, ...]}. The reference producer/validator is plan_to_nodes.py; the Executor consumes the local:true entries as RED-gated nodes.",
+  "description": "The Planner's output contract: a plan embeds one fenced JSON block {\"execution-manifest\": [entry, ...]}. The reference producer/validator is plan_to_nodes.py; an executor consumes the local:true entries as RED-gated nodes.",
   "type": "object",
   "required": ["execution-manifest"],
   "properties": {
@@ -52,7 +52,7 @@
         "local": {
           "type": "boolean",
           "default": false,
-          "description": "Offload to the local cascade. Only local:true entries become nodes; local:false is executed by the lead model."
+          "description": "Offload to an executor as a node. Only local:true entries become nodes; local:false is executed inline by the planning model."
         }
       },
       "allOf": [

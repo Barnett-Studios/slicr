@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """plan_to_nodes.py — extract the execution-manifest from a plan file and emit
 node JSON for run_nodes.py. Deterministic, zero-token. Missing/malformed
-manifest -> emit nothing (graceful fallback to plain Opus execution)."""
+manifest -> emit nothing (graceful fallback to plain single-model execution)."""
 
 import json
 import re
