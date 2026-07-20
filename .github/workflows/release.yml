@@ -57,7 +57,10 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
         with:
-          cosign-release: 'v3.1.2'
+          # Pin to the latest cosign 2.x. cosign 3.x dropped the detached
+          # `cosign-linux-amd64.sig` asset that this installer verifies against, so a
+          # 3.x pin 404s the sig download (exit 22). 2.6.4 still ships the .sig.
+          cosign-release: 'v2.6.4'
       - name: Sign image (keyless)
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
