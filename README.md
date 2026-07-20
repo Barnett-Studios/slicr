@@ -3,6 +3,7 @@
 [![CI](https://github.com/Barnett-Studios/slicr/actions/workflows/ci.yml/badge.svg)](https://github.com/Barnett-Studios/slicr/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![Image](https://img.shields.io/badge/ghcr-slicr-blue?logo=docker)](https://github.com/Barnett-Studios/slicr/pkgs/container/slicr)
 
 **Decompose a task into a granular, RED-gated execution-manifest — the producer half of the
 plan→execute seam.** A capable model plans; cheaper executors run the nodes. slicr's job is the
@@ -36,6 +37,17 @@ python3 plan_to_nodes.py plan.md ./nodes/
 python3 -c "import json,jsonschema; \
   s=json.load(open('schema/execution-manifest.schema.json')); \
   jsonschema.Draft202012Validator(s).validate(json.load(open('manifest.json')))"
+```
+
+### As a container
+
+slicr's distributable artifact is a **container image** — it is a pure-stdlib reference script,
+not a PyPI package, and harnesses consume it via `docker run` (this is how dotclaude's execute-plan
+loop invokes it):
+
+```sh
+# -u makes the emitted node files match your host ownership (slicr bakes no user)
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/work ghcr.io/barnett-studios/slicr plan.md nodes/
 ```
 
 A missing or malformed manifest is **not** an error — `plan_to_nodes.py` emits nothing and the

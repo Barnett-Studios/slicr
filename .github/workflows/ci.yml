@@ -25,3 +25,19 @@ jobs:
         run: ruff format --check .
       - name: test (validator + schema consistency)
         run: python3 -m pytest test_plan_to_nodes.py test_schema.py -q
+
+  image:
+    name: docker-build-and-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: build the runtime image (validates Dockerfile + pinned base)
+        run: docker build -t slicr:ci .
+      - name: smoke — the image runs slicr and prints usage on no args
+        run: |
+          # slicr exits 2 on wrong argc; capture output regardless (pipefail-safe).
+          out="$(docker run --rm slicr:ci 2>&1 || true)"
+          echo "$out" | grep -qi usage
