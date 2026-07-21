@@ -115,3 +115,38 @@ def test_missing_required_key_rejected(tmp_path):
     bad = [{"id": "x", "files": ["a.py"], "local": True}]  # no change/accept
     with pytest.raises(ValueError):
         ptn.emit(bad, tmp_path)
+
+
+# ── run-json envelope surface (ADR-0052/0055 consume-back) ──────────────────────
+
+
+def test_run_json_ok_envelope_matches_emit(tmp_path):
+    out = json.loads(ptn.run_json(json.dumps({"plan_text": PLAN})))
+    assert out["schema_version"] == "1"
+    assert out["status"] == "ok"
+    nodes = out["body"]["nodes"]
+    # Same filenames/order as emit(), and each node byte-identical to the written file.
+    written = ptn.emit(ptn.extract_manifest(PLAN), tmp_path)
+    assert [n["filename"] for n in nodes] == written
+    for n in nodes:
+        assert n["node"] == json.loads((tmp_path / n["filename"]).read_text())
+
+
+def test_run_json_invalid_json_is_error_envelope():
+    out = json.loads(ptn.run_json("not json"))
+    assert out["status"] == "error"
+
+
+def test_run_json_bad_manifest_is_error_envelope():
+    bad_plan = (
+        '```json\n{"execution-manifest": '
+        '[{"id": "x", "files": ["a.py"], "local": true}]}\n```'  # no change/accept
+    )
+    out = json.loads(ptn.run_json(json.dumps({"plan_text": bad_plan})))
+    assert out["status"] == "error"
+
+
+def test_run_json_no_manifest_is_ok_with_zero_nodes():
+    out = json.loads(ptn.run_json(json.dumps({"plan_text": "# plain plan"})))
+    assert out["status"] == "ok"
+    assert out["body"]["nodes"] == []

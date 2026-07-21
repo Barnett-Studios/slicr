@@ -68,28 +68,66 @@ def to_node(e):
     return node
 
 
-def emit(manifest, out_dir):
-    """Validate all entries, then write NN-slug.json for local:true entries in
-    manifest order. Returns the filenames written."""
+def compute_nodes(manifest):
+    """Validate all entries, then return the ordered [(filename, node)] list for local:true
+    entries in manifest order. The single source of truth for node identity + numbering,
+    shared by file emission and the run-json envelope so both produce identical results."""
     for idx, e in enumerate(manifest):
         validate_entry(e, idx)
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    written = []
+    nodes = []
     n = 0
     for e in manifest:
         if not e.get("local", False):
             continue
         n += 1
-        fname = f"{n:02d}-{e['id']}.json"
-        (out / fname).write_text(json.dumps(to_node(e), indent=1))
+        nodes.append((f"{n:02d}-{e['id']}.json", to_node(e)))
+    return nodes
+
+
+def emit(manifest, out_dir):
+    """Validate all entries, then write NN-slug.json for local:true entries in
+    manifest order. Returns the filenames written."""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    written = []
+    for fname, node in compute_nodes(manifest):
+        (out / fname).write_text(json.dumps(node, indent=1))
         written.append(fname)
     return written
 
 
+def run_json(request_text):
+    """ADR-0052 response-envelope mode: a JSON request `{plan_text}` in, a
+    `{schema_version, status, body}` envelope string out. body.nodes is the ordered
+    [{filename, node}] list a consumer writes verbatim — byte-identical to emit()."""
+    try:
+        req = json.loads(request_text)
+    except ValueError as e:
+        return _error_envelope(f"invalid run request JSON: {e}")
+    plan_text = req.get("plan_text", "")
+    manifest = extract_manifest(plan_text)
+    try:
+        nodes = compute_nodes(manifest)
+    except ValueError as e:
+        return _error_envelope(f"bad_manifest: {e}")
+    body = {"nodes": [{"filename": fname, "node": node} for fname, node in nodes]}
+    return json.dumps({"schema_version": "1", "status": "ok", "body": body})
+
+
+def _error_envelope(message):
+    return json.dumps({"schema_version": "1", "status": "error", "body": {"message": message}})
+
+
 def main():
+    # `run-json`: the ADR-0052 envelope surface (request on stdin, envelope on stdout,
+    # exit 0 — the decision, including a bad manifest, is in the envelope) consumed by
+    # the framework's execute-plan wrapper via `docker run`.
+    if len(sys.argv) == 2 and sys.argv[1] == "run-json":
+        print(run_json(sys.stdin.read()))
+        sys.exit(0)
+
     if len(sys.argv) != 3:
-        print("usage: plan_to_nodes.py <plan.md> <out-dir>")
+        print("usage: plan_to_nodes.py <plan.md> <out-dir>   |   plan_to_nodes.py run-json")
         sys.exit(2)
     text = Path(sys.argv[1]).read_text()
     manifest = extract_manifest(text)
