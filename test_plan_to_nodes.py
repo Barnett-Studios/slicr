@@ -150,3 +150,102 @@ def test_run_json_no_manifest_is_ok_with_zero_nodes():
     out = json.loads(ptn.run_json(json.dumps({"plan_text": "# plain plan"})))
     assert out["status"] == "ok"
     assert out["body"]["nodes"] == []
+
+
+# ── RC-1: node identity is a path-safe slug (slicr#4, ADR-0056) ─────────────────
+# These assert ValueError SPECIFICALLY, never bare `raises`. On unfixed code a
+# traversal id already raises FileNotFoundError (the "NN-" prefix binds to the
+# first path component and write_text does not create parents), so a test that
+# accepted any exception would be a false green.
+
+def _entry(**kw):
+    e = {"id": "ok", "files": ["a.py"], "change": "c", "accept": "true", "local": True}
+    e.update(kw)
+    return e
+
+
+@pytest.mark.parametrize("bad_id", [
+    "../../evil",              # classic traversal
+    "../evil",
+    "x/../../../../tmp/evil",  # traversal behind a leading segment
+    "a/b",                     # any separator at all
+    "a\\b",                    # windows separator
+    ".hidden",                 # leading dot -> makes ".." unrepresentable
+    "..",
+    ".",
+    "-leading-dash",
+    "",
+])
+def test_rc1_id_must_be_a_slug(bad_id, tmp_path):
+    with pytest.raises(ValueError):
+        ptn.emit([_entry(id=bad_id)], tmp_path / "out")
+
+
+def test_rc1_id_absolute_rejected(tmp_path):
+    with pytest.raises(ValueError):
+        ptn.emit([_entry(id="/tmp/evil")], tmp_path / "out")
+
+
+def test_rc1_id_trailing_newline_rejected(tmp_path):
+    # Pins re.fullmatch over re.match: `$` matches before a trailing newline, so
+    # re.match("[A-Za-z0-9][...]*$", "evil\n") succeeds and would let it through.
+    with pytest.raises(ValueError):
+        ptn.emit([_entry(id="evil\n")], tmp_path / "out")
+
+
+def test_rc1_id_length_bounded(tmp_path):
+    # Unbounded, this reaches the filesystem and raises OSError(File name too long),
+    # which main()'s `except ValueError` does not catch -> traceback, not
+    # FAILURE(bad_manifest). The bound keeps the failure in the declared class.
+    with pytest.raises(ValueError):
+        ptn.emit([_entry(id="a" * 250)], tmp_path / "out")
+
+
+@pytest.mark.parametrize("bad_file", ["../../etc/passwd", "/etc/passwd", "a/../../b"])
+def test_rc1_files_traversal_rejected(bad_file, tmp_path):
+    with pytest.raises(ValueError):
+        ptn.emit([_entry(files=[bad_file])], tmp_path / "out")
+
+
+def test_rc1_no_file_written_outside_out_dir(tmp_path):
+    # The security property itself, asserted on the filesystem rather than on the
+    # exception: nothing lands outside out/ regardless of how the write fails.
+    out = tmp_path / "out"
+    canary = tmp_path / "evil.json"
+    with pytest.raises(ValueError):
+        ptn.emit([_entry(id="../evil")], out)
+    assert not canary.exists()
+    assert list(out.glob("**/*")) == [] or not out.exists()
+
+
+def test_rc1_symlink_in_out_dir_cannot_escape(tmp_path):
+    # Pins Path.resolve() over os.path.normpath: normpath would compute a target
+    # that looks contained while the write follows the symlink out of the tree.
+    out = tmp_path / "out"
+    out.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (out / "link").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError):
+        ptn._safe_target(out, "link/escaped.json")
+    assert not (outside / "escaped.json").exists()
+
+
+# Compatibility floor. A pattern that rejects real ids is a worse outage than the
+# latent traversal it prevents. Shapes below are drawn from the 94 distinct node ids
+# observed in production; the uppercase-leading ones are real and are exactly what
+# the originally-proposed ^[a-z0-9][a-z0-9-]*$ would have broken. (Shape-covering
+# sample rather than all 94 verbatim — this is a public repo and the internal node
+# names carry no test value beyond their character shapes.)
+REAL_ID_SHAPES = [
+    "N1-surprising-cochange", "N2-risk-percentile", "N7-risk-provenance-terms",
+    "01-compact-path", "go-05-split-join-ext-roundtrip", "cpp-bowling",
+    "emit-meta-yaml", "classify-local-error", "a", "A", "0",
+    "with_underscore", "with.dot", "a" * 100,
+]
+
+
+@pytest.mark.parametrize("good_id", REAL_ID_SHAPES)
+def test_rc1_real_production_ids_still_valid(good_id, tmp_path):
+    written = ptn.emit([_entry(id=good_id)], tmp_path / "out")
+    assert written == [f"01-{good_id}.json"]

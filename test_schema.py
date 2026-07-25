@@ -121,3 +121,35 @@ def test_good_manifest_accepted_by_both(tmp_path):
 def test_bad_manifest_rejected_by_both(name, entries, tmp_path):
     assert not schema_ok(entries), f"schema wrongly accepted {name}"
     assert not validator_ok(entries, tmp_path), f"reference validator wrongly accepted {name}"
+
+
+# ── RC-1: the schema carries the slug rule too (slicr#4, ADR-0056) ──────────────
+# The schema is the published contract; the reference validator is the authority
+# where the two dialects disagree (ECMA-262 `$` vs Python's, on a trailing
+# newline). Both must reject a traversal id, or an external producer reading only
+# the schema would emit manifests this repo refuses.
+
+def _entry(**kw):
+    e = {"id": "ok", "files": ["a.py"], "change": "c", "accept": "true", "local": True}
+    e.update(kw)
+    return e
+
+
+@pytest.mark.parametrize("bad_id", ["../evil", "a/b", ".hidden", "..", "-lead", "a" * 250])
+def test_rc1_schema_rejects_unsafe_id(bad_id):
+    assert not schema_ok([_entry(id=bad_id)])
+
+
+@pytest.mark.parametrize("good_id", [
+    "N1-surprising-cochange", "01-compact-path", "with_underscore", "with.dot", "a",
+])
+def test_rc1_schema_accepts_real_ids(good_id):
+    assert schema_ok([_entry(id=good_id)])
+
+
+@pytest.mark.parametrize("bad_id", ["../evil", "a/b", ".hidden", "..", "-lead", "a" * 250])
+def test_rc1_schema_and_validator_agree_on_unsafe_id(bad_id, tmp_path):
+    # Lockstep: neither surface may be the weaker one.
+    assert not schema_ok([_entry(id=bad_id)])
+    with pytest.raises(ValueError):
+        ptn.validate_entry(_entry(id=bad_id), 0)
