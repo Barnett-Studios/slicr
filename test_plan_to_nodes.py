@@ -158,24 +158,28 @@ def test_run_json_no_manifest_is_ok_with_zero_nodes():
 # first path component and write_text does not create parents), so a test that
 # accepted any exception would be a false green.
 
+
 def _entry(**kw):
     e = {"id": "ok", "files": ["a.py"], "change": "c", "accept": "true", "local": True}
     e.update(kw)
     return e
 
 
-@pytest.mark.parametrize("bad_id", [
-    "../../evil",              # classic traversal
-    "../evil",
-    "x/../../../../tmp/evil",  # traversal behind a leading segment
-    "a/b",                     # any separator at all
-    "a\\b",                    # windows separator
-    ".hidden",                 # leading dot -> makes ".." unrepresentable
-    "..",
-    ".",
-    "-leading-dash",
-    "",
-])
+@pytest.mark.parametrize(
+    "bad_id",
+    [
+        "../../evil",  # classic traversal
+        "../evil",
+        "x/../../../../tmp/evil",  # traversal behind a leading segment
+        "a/b",  # any separator at all
+        "a\\b",  # windows separator
+        ".hidden",  # leading dot -> makes ".." unrepresentable
+        "..",
+        ".",
+        "-leading-dash",
+        "",
+    ],
+)
 def test_rc1_id_must_be_a_slug(bad_id, tmp_path):
     with pytest.raises(ValueError):
         ptn.emit([_entry(id=bad_id)], tmp_path / "out")
@@ -238,10 +242,20 @@ def test_rc1_symlink_in_out_dir_cannot_escape(tmp_path):
 # sample rather than all 94 verbatim — this is a public repo and the internal node
 # names carry no test value beyond their character shapes.)
 REAL_ID_SHAPES = [
-    "N1-surprising-cochange", "N2-risk-percentile", "N7-risk-provenance-terms",
-    "01-compact-path", "go-05-split-join-ext-roundtrip", "cpp-bowling",
-    "emit-meta-yaml", "classify-local-error", "a", "A", "0",
-    "with_underscore", "with.dot", "a" * 100,
+    "N1-surprising-cochange",
+    "N2-risk-percentile",
+    "N7-risk-provenance-terms",
+    "01-compact-path",
+    "go-05-split-join-ext-roundtrip",
+    "cpp-bowling",
+    "emit-meta-yaml",
+    "classify-local-error",
+    "a",
+    "A",
+    "0",
+    "with_underscore",
+    "with.dot",
+    "a" * 100,
 ]
 
 

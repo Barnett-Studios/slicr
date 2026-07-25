@@ -57,9 +57,7 @@ def validate_entry(e, idx):
         # Bounded here so an over-long id fails as a bad manifest rather than as an
         # OSError(File name too long) at the write, which main()'s except ValueError
         # would not catch.
-        raise ValueError(
-            f"entry {idx}: 'id' exceeds {ID_MAX_LEN} characters ({len(e['id'])})"
-        )
+        raise ValueError(f"entry {idx}: 'id' exceeds {ID_MAX_LEN} characters ({len(e['id'])})")
     if not ID_RE.fullmatch(e["id"]):
         raise ValueError(
             f"entry {idx}: 'id' {e['id']!r} is not a path-safe slug "

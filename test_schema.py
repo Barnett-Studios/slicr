@@ -129,6 +129,7 @@ def test_bad_manifest_rejected_by_both(name, entries, tmp_path):
 # newline). Both must reject a traversal id, or an external producer reading only
 # the schema would emit manifests this repo refuses.
 
+
 def _entry(**kw):
     e = {"id": "ok", "files": ["a.py"], "change": "c", "accept": "true", "local": True}
     e.update(kw)
@@ -140,9 +141,16 @@ def test_rc1_schema_rejects_unsafe_id(bad_id):
     assert not schema_ok([_entry(id=bad_id)])
 
 
-@pytest.mark.parametrize("good_id", [
-    "N1-surprising-cochange", "01-compact-path", "with_underscore", "with.dot", "a",
-])
+@pytest.mark.parametrize(
+    "good_id",
+    [
+        "N1-surprising-cochange",
+        "01-compact-path",
+        "with_underscore",
+        "with.dot",
+        "a",
+    ],
+)
 def test_rc1_schema_accepts_real_ids(good_id):
     assert schema_ok([_entry(id=good_id)])
 
