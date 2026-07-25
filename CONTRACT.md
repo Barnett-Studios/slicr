@@ -21,13 +21,26 @@ Per entry:
 
 | Key | Req | Meaning |
 |---|---|---|
-| `id` | ✓ | node id → `NN-<id>.json` |
-| `files` | ✓ | editable files (non-empty); a `create` node lists **exactly one** |
+| `id` | ✓ | node id → `NN-<id>.json`. **Path-safe slug**: `^[A-Za-z0-9][A-Za-z0-9._-]*$`, ≤100 chars |
+| `files` | ✓ | editable files (non-empty), **relative paths inside the repo** — no leading `/`, no `..` component; a `create` node lists **exactly one** |
 | `change` | ✓ | task description shown to the executing model |
 | `accept` | ✓ | shell command; **exit 0 ⇔ solved** — the RED oracle, authored up front |
 | `kind` | | `edit` (default) \| `create` |
 | `forbid` | | subset of `{new_deps}` |
 | `local` | | `true` → offload to an executor as a node; `false` (default) → executed inline by the planning model |
+
+## The manifest is untrusted input
+
+The manifest is authored by a planning **model**. `id` becomes a filename and `files` become
+write targets, so both are validated as a trust boundary rather than consumed as given: the id
+charset forbids every path separator and a leading dot, making `..` and `.` *unrepresentable*,
+and every write additionally resolves under the output directory before it happens (`resolve()`,
+not `normpath` — a symlink planted inside the output directory must not be a way out).
+
+A manifest that tries to escape the output directory is **rejected loudly** (`ValueError` →
+`FAILURE(bad_manifest)` / exit 1, or an `error` envelope in `run-json`); it is not sanitized into
+something writable, because silently renaming a node changes its identity and makes the emitted
+files disagree with the manifest that produced them.
 
 ## Granularity discipline (why single-region nodes)
 

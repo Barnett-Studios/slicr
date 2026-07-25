@@ -21,13 +21,15 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Node id; becomes the NN-<id>.json filename."
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "description": "Node id; becomes the NN-<id>.json filename. Must be a path-safe slug: no path separators and no leading dot, so '..' and '.' are unrepresentable and the id can never traverse out of the output directory. The reference validator (plan_to_nodes.py) applies the same rule with re.fullmatch and is the authority where dialects differ on a trailing newline."
         },
         "files": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": { "type": "string", "minLength": 1 },
           "minItems": 1,
-          "description": "Editable files the node may change (relative paths)."
+          "description": "Editable files the node may change. Must be relative paths inside the repo: no leading '/', no '..' component. Enforced by the reference validator rather than by a pattern here — expressing 'no .. component' needs negative lookahead, which the Rust regex engine used elsewhere in this family does not support, and an unenforceable-by-some-consumers pattern is worse than a documented rule."
         },
         "change": {
           "type": "string",
