@@ -263,3 +263,38 @@ REAL_ID_SHAPES = [
 def test_rc1_real_production_ids_still_valid(good_id, tmp_path):
     written = ptn.emit([_entry(id=good_id)], tmp_path / "out")
     assert written == [f"01-{good_id}.json"]
+
+
+# ── RC-1 follow-up: `files` must not accept a tilde-expanding path (review) ──────
+#
+# `is_absolute()` and a `..` component are the two ways a path *looks* like it leaves
+# the repo. A leading `~` is a third: PurePosixPath treats "~/.ssh/authorized_keys" as
+# a clean relative path, but any consumer that calls expanduser() — or hands the string
+# to a shell, where tilde expansion happens at word start — resolves it to an absolute
+# path outside the repo entirely.
+#
+# The check is `startswith("~")` rather than a parts inspection because that is exactly
+# what expands: `os.path.expanduser` and shell tilde expansion both trigger only at
+# position 0. `./~/x` and `backup~` do NOT expand and stay legal — over-rejecting a
+# legitimate emacs backup file would be its own bug.
+
+
+@pytest.mark.parametrize("bad_file", ["~/.ssh/authorized_keys", "~root/.ssh/id_rsa", "~"])
+def test_rc1_files_tilde_rejected(bad_file, tmp_path):
+    with pytest.raises(ValueError, match="files"):
+        ptn.emit([_entry(files=[bad_file])], tmp_path)
+
+
+@pytest.mark.parametrize("ok_file", ["./~/x", "backup~", "src/~notexpanded", "a~b/c.py"])
+def test_rc1_files_non_expanding_tilde_still_allowed(ok_file, tmp_path):
+    """Only a LEADING tilde expands. Rejecting the rest would break real filenames."""
+    written = ptn.emit([_entry(files=[ok_file])], tmp_path)
+    assert len(written) == 1
+
+
+def test_rc1_tilde_would_have_escaped_the_repo():
+    """Pins WHY this is rejected: the string really does resolve outside the repo."""
+    import os.path
+
+    assert os.path.isabs(os.path.expanduser("~/.ssh/authorized_keys"))
+    assert not os.path.isabs(os.path.expanduser("./~/x")), "control: this one is inert"

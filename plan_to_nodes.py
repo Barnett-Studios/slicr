@@ -77,10 +77,16 @@ def validate_entry(e, idx):
         # consumes them — reject at the producer so the failure surfaces at plan
         # time with a clear message, not mid-batch.
         p = PurePosixPath(f)
-        if p.is_absolute() or ".." in p.parts:
+        # A leading `~` is the third way out. PurePosixPath sees a clean relative path,
+        # but any consumer that calls expanduser() — or hands the string to a shell,
+        # where tilde expansion also fires only at word start — resolves it to an
+        # absolute path outside the repo. `startswith` matches that expansion rule
+        # exactly, so `backup~` and `./~/x`, which do not expand, stay legal.
+        if p.is_absolute() or ".." in p.parts or f.startswith("~"):
             raise ValueError(
                 f"entry {idx} ({e['id']}): 'files' entry {f!r} must be a relative "
-                "path inside the repo (no leading '/', no '..' component)"
+                "path inside the repo (no leading '/', no '..' component, no "
+                "leading '~')"
             )
     if "local" in e and not isinstance(e["local"], bool):
         raise ValueError(f"entry {idx} ({e['id']}): 'local' must be a boolean")

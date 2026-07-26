@@ -4,18 +4,27 @@
   "title": "execution-manifest",
   "description": "The Slicr's output contract: a plan embeds one fenced JSON block {\"execution-manifest\": [entry, ...]}. The reference producer/validator is plan_to_nodes.py; an executor consumes the local:true entries as RED-gated nodes.",
   "type": "object",
-  "required": ["execution-manifest"],
+  "required": [
+    "execution-manifest"
+  ],
   "properties": {
     "execution-manifest": {
       "type": "array",
-      "items": { "$ref": "#/$defs/entry" }
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
     }
   },
   "additionalProperties": true,
   "$defs": {
     "entry": {
       "type": "object",
-      "required": ["id", "files", "change", "accept"],
+      "required": [
+        "id",
+        "files",
+        "change",
+        "accept"
+      ],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -27,9 +36,14 @@
         },
         "files": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^~/]",
+            "description": "A repo-relative editable path. The pattern enforces the two rules a lookahead-free regex engine can express \u2014 no leading '/' and no leading '~' (which expanduser and shell tilde expansion resolve outside the repo). 'No .. component' still cannot be expressed here: it needs a negative lookahead, which the Rust regex crate does not support, so the reference validator remains authoritative. A producer trusting the schema alone can still emit a '..' path."
+          },
           "minItems": 1,
-          "description": "Editable files the node may change. Must be relative paths inside the repo: no leading '/', no '..' component. Enforced by the reference validator rather than by a pattern here — expressing 'no .. component' needs negative lookahead, which the Rust regex engine used elsewhere in this family does not support, and an unenforceable-by-some-consumers pattern is worse than a documented rule."
+          "description": "Editable files the node may change. Must be relative paths inside the repo: no leading '/', no '..' component. Enforced by the reference validator rather than by a pattern here \u2014 expressing 'no .. component' needs negative lookahead, which the Rust regex engine used elsewhere in this family does not support, and an unenforceable-by-some-consumers pattern is worse than a documented rule."
         },
         "change": {
           "type": "string",
@@ -41,13 +55,20 @@
           "description": "Shell command; exit 0 iff the node is solved (the RED oracle)."
         },
         "kind": {
-          "enum": ["edit", "create"],
+          "enum": [
+            "edit",
+            "create"
+          ],
           "default": "edit",
           "description": "edit an existing region, or create a new single file."
         },
         "forbid": {
           "type": "array",
-          "items": { "enum": ["new_deps"] },
+          "items": {
+            "enum": [
+              "new_deps"
+            ]
+          },
           "uniqueItems": true,
           "description": "Constraints the change must not violate."
         },
@@ -60,11 +81,21 @@
       "allOf": [
         {
           "if": {
-            "properties": { "kind": { "const": "create" } },
-            "required": ["kind"]
+            "properties": {
+              "kind": {
+                "const": "create"
+              }
+            },
+            "required": [
+              "kind"
+            ]
           },
           "then": {
-            "properties": { "files": { "maxItems": 1 } }
+            "properties": {
+              "files": {
+                "maxItems": 1
+              }
+            }
           }
         }
       ]
