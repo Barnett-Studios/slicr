@@ -6,10 +6,24 @@ manifest -> emit nothing (graceful fallback to plain single-model execution)."""
 import json
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ALLOWED_FORBID = {"new_deps"}
 ALLOWED_KIND = {"edit", "create"}
+# The node id becomes a filename (`NN-<id>.json`), so it must be a path-safe slug.
+# The charset forbids every path separator AND a leading '.', which together make
+# ".." and "." unrepresentable — the traversal is impossible to express, not merely
+# caught. Interior dots are harmless once no separator can appear.
+#
+# It is deliberately not narrower: all 94 distinct node ids observed in production
+# validate under it, including uppercase-leading ones (N1-surprising-cochange). A
+# lowercase-only pattern would reject real manifests — a worse outage than the
+# latent traversal it prevents.
+#
+# fullmatch, never match: `$` matches *before* a trailing newline, so re.match
+# would accept "evil\n".
+ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+ID_MAX_LEN = 100
 # Recognize EVERY fence opening — bare ``` and language-tagged (```python, ```sh, …) — as
 # an opening. Recognizing only bare/```json openings desyncs fence pairing on any plan that
 # has language-tagged code blocks before its manifest (the tagged opening isn't matched but
@@ -39,6 +53,16 @@ def validate_entry(e, idx):
     # divergence is unknown-key leniency; the schema is strict there, this is not).
     if not isinstance(e["id"], str) or not e["id"]:
         raise ValueError(f"entry {idx}: 'id' must be a non-empty string")
+    if len(e["id"]) > ID_MAX_LEN:
+        # Bounded here so an over-long id fails as a bad manifest rather than as an
+        # OSError(File name too long) at the write, which main()'s except ValueError
+        # would not catch.
+        raise ValueError(f"entry {idx}: 'id' exceeds {ID_MAX_LEN} characters ({len(e['id'])})")
+    if not ID_RE.fullmatch(e["id"]):
+        raise ValueError(
+            f"entry {idx}: 'id' {e['id']!r} is not a path-safe slug "
+            f"(must match {ID_RE.pattern} — no path separators, no leading dot)"
+        )
     if not isinstance(e["change"], str):
         raise ValueError(f"entry {idx} ({e['id']}): 'change' must be a string")
     if not isinstance(e["accept"], str) or not e["accept"]:
@@ -47,6 +71,23 @@ def validate_entry(e, idx):
         raise ValueError(f"entry {idx} ({e['id']}): 'files' must be a non-empty list")
     if not all(isinstance(f, str) for f in e["files"]):
         raise ValueError(f"entry {idx} ({e['id']}): 'files' entries must all be strings")
+    for f in e["files"]:
+        # `files` are the editable paths an executor will write. Absolute or
+        # escaping entries are out of contract regardless of which executor
+        # consumes them — reject at the producer so the failure surfaces at plan
+        # time with a clear message, not mid-batch.
+        p = PurePosixPath(f)
+        # A leading `~` is the third way out. PurePosixPath sees a clean relative path,
+        # but any consumer that calls expanduser() — or hands the string to a shell,
+        # where tilde expansion also fires only at word start — resolves it to an
+        # absolute path outside the repo. `startswith` matches that expansion rule
+        # exactly, so `backup~` and `./~/x`, which do not expand, stay legal.
+        if p.is_absolute() or ".." in p.parts or f.startswith("~"):
+            raise ValueError(
+                f"entry {idx} ({e['id']}): 'files' entry {f!r} must be a relative "
+                "path inside the repo (no leading '/', no '..' component, no "
+                "leading '~')"
+            )
     if "local" in e and not isinstance(e["local"], bool):
         raise ValueError(f"entry {idx} ({e['id']}): 'local' must be a boolean")
     kind = e.get("kind", "edit")
@@ -84,6 +125,30 @@ def compute_nodes(manifest):
     return nodes
 
 
+def _safe_target(out, fname):
+    """Resolve `fname` under `out` and refuse anything that escapes it.
+
+    Defence in depth behind the id slug rule: this is the guard that still holds if
+    the filename format changes or the slug check regresses, and the only one that
+    covers a symlink pre-planted inside `out` (resolve() follows symlinks;
+    os.path.normpath would not, and would compute a contained-looking path whose
+    write still lands outside).
+
+    Containment is tested with Path.parents membership, not str.startswith, which
+    would wrongly accept '/out2/x' as inside '/out'.
+    """
+    out = Path(out)
+    if PurePosixPath(fname).is_absolute() or ".." in PurePosixPath(fname).parts:
+        raise ValueError(f"unsafe node filename {fname!r} (absolute or contains '..') — refused")
+    out_resolved = out.resolve()
+    target = (out_resolved / fname).resolve()
+    if out_resolved not in target.parents:
+        raise ValueError(
+            f"node filename {fname!r} resolves to {target}, outside {out_resolved} — refused"
+        )
+    return target
+
+
 def emit(manifest, out_dir):
     """Validate all entries, then write NN-slug.json for local:true entries in
     manifest order. Returns the filenames written."""
@@ -91,7 +156,7 @@ def emit(manifest, out_dir):
     out.mkdir(parents=True, exist_ok=True)
     written = []
     for fname, node in compute_nodes(manifest):
-        (out / fname).write_text(json.dumps(node, indent=1))
+        _safe_target(out, fname).write_text(json.dumps(node, indent=1))
         written.append(fname)
     return written
 
