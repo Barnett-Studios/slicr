@@ -4,6 +4,18 @@ The **Slicr** component: decompose a task into a granular, RED-gated **execution
 producer half of the plan→execute seam. slicr *owns* the manifest schema; an executor (and any
 orchestrator around it) consume it. Output contract, not a runtime: `plan → execution-manifest (JSON)`.
 
+## Versioning
+
+`VERSION` holds this component's version and every release carries a matching `v<version>` tag.
+The number was previously carried by the git tag alone, so nothing in a checkout said which
+version it was — a consumer holding a working copy, or an image built from one, had no in-tree
+way to answer that.
+
+Under the 0.x convention the **minor** is the breaking position: a change to this component's
+request/response contract or CLI surface is a minor bump, and behaviour-preserving fixes are
+patches. The version in `VERSION`, the git tag, and the published ghcr image tag are the same
+number by construction — dotclaude#63 is what a drift between those looks like.
+
 ## The execution-manifest schema (the owned contract)
 
 Canonical, machine-checkable: [`schema/execution-manifest.schema.json`](schema/execution-manifest.schema.json)
