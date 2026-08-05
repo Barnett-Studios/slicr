@@ -9,7 +9,7 @@
 not abandoned. See the [component map](https://github.com/Barnett-Studios) for how this fits the rest.
 
 **Decompose a task into a granular, RED-gated execution-manifest — the producer half of the
-plan→execute seam.** A capable model plans; cheaper executors run the nodes. slicr's job is the
+plan → execute seam.** A capable model plans; cheaper executors run the nodes. slicr's job is the
 decomposition and the contract it hands down: single-region nodes, each with a discriminating
 acceptance test authored up front.
 
@@ -19,7 +19,7 @@ acceptance test authored up front.
 ## What's here
 
 - [`schema/execution-manifest.schema.json`](schema/execution-manifest.schema.json) — the owned
-  contract (JSON Schema 2020-12). This is what makes the plan→execute seam swappable.
+  contract (JSON Schema 2020-12). This is what makes the plan → execute seam swappable.
 - [`plan_to_nodes.py`](plan_to_nodes.py) — the deterministic, zero-token reference producer/validator:
   plan → validated `NN-<id>.json` nodes for your executor. Fail-open on a missing/malformed manifest.
 - `test_plan_to_nodes.py`, `test_schema.py` — the validator's behavior + schema↔validator consistency
