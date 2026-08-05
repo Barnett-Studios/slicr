@@ -1,7 +1,7 @@
 # slicr — Contract
 
 The **Slicr** component: decompose a task into a granular, RED-gated **execution-manifest** — the
-producer half of the plan→execute seam. slicr *owns* the manifest schema; an executor (and any
+producer half of the plan → execute seam. slicr *owns* the manifest schema; an executor (and any
 orchestrator around it) consume it. Output contract, not a runtime: `plan → execution-manifest (JSON)`.
 
 ## Versioning
