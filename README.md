@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![Image](https://img.shields.io/badge/ghcr-slicr-blue?logo=docker)](https://github.com/Barnett-Studios/slicr/pkgs/container/slicr)
 
-**plan→execute seam · Stable** — feature-complete; maintenance only. The scope is finished,
+**plan → execute seam · Stable** — feature-complete; maintenance only. The scope is finished,
 not abandoned. See the [component map](https://github.com/Barnett-Studios) for how this fits the rest.
 
 **Decompose a task into a granular, RED-gated execution-manifest — the producer half of the
