@@ -37,6 +37,10 @@ ALLOWED_KIND = {"edit", "create"}
 # would accept "evil\n".
 ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 ID_MAX_LEN = 100
+# The shape emit() writes, and therefore the only shape it will delete when pruning a
+# previous run's output (slicr#5). Kept in lockstep with the f-string in compute_nodes:
+# `\d+` rather than `\d\d` because the counter is zero-padded to two, not capped at two.
+NODE_FILE_RE = re.compile(r"\d+-[A-Za-z0-9][A-Za-z0-9._-]*\.json")
 # Recognize EVERY fence opening — bare ``` and language-tagged (```python, ```sh, …) — as
 # an opening. Recognizing only bare/```json openings desyncs fence pairing on any plan that
 # has language-tagged code blocks before its manifest (the tagged opening isn't matched but
@@ -197,16 +201,45 @@ def _safe_target(out, fname):
     return target
 
 
+def prune_stale_nodes(out, keep):
+    """Delete node files in `out` that this run did not produce. Returns their names.
+
+    Emitting into a directory that already holds a previous plan's nodes leaves the ones
+    the new manifest dropped or renamed — and an executor globs the directory, so it runs
+    them (slicr#5). A shorter re-plan silently executed the tail of the old one.
+
+    Deliberately narrow, because this deletes files:
+      * direct children only, never a walk;
+      * only names matching the `NN-<id>.json` shape this script itself emits, so anything
+        else in the directory — a README, a log, an executor's own state — is untouched;
+      * `keep` spares the files just written, so a node whose identity is unchanged is
+        never briefly absent.
+    """
+    pruned = []
+    for p in sorted(out.iterdir()):
+        if p.name in keep or not NODE_FILE_RE.fullmatch(p.name) or not p.is_file():
+            continue
+        p.unlink()
+        pruned.append(p.name)
+    return pruned
+
+
 def emit(manifest, out_dir):
-    """Validate all entries, then write NN-slug.json for local:true entries in
-    manifest order. Returns the filenames written."""
+    """Validate all entries, then write NN-slug.json for local:true entries in manifest
+    order. Returns `(written, pruned)` — the filenames written, and the stale node files
+    from a previous run that were removed.
+
+    compute_nodes runs first, before the directory is touched at all: a manifest that will
+    not validate must leave the previous run's output exactly as it was, rather than
+    deleting it on the way to raising."""
+    nodes = compute_nodes(manifest)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    written = []
-    for fname, node in compute_nodes(manifest):
+    written = [fname for fname, _ in nodes]
+    pruned = prune_stale_nodes(out, set(written))
+    for fname, node in nodes:
         _safe_target(out, fname).write_text(json.dumps(node, indent=1))
-        written.append(fname)
-    return written
+    return written, pruned
 
 
 def run_json(request_text):
@@ -287,11 +320,15 @@ def main():
         print("no execution-manifest found — falling back to plain execution (0 nodes)")
         sys.exit(0)
     try:
-        written = emit(manifest, sys.argv[2])
+        written, pruned = emit(manifest, sys.argv[2])
     except ValueError as e:
         print(f"FAILURE(bad_manifest): {e}")
         sys.exit(1)
     print(f"wrote {len(written)} node(s): {', '.join(written) or '(none local)'}")
+    if pruned:
+        # Named, not counted. Deleting files on someone's behalf is worth showing, and the
+        # names are what tells an operator whether the plan really dropped those nodes.
+        print(f"removed {len(pruned)} stale node(s) from a previous run: {', '.join(pruned)}")
     sys.exit(0)
 
 

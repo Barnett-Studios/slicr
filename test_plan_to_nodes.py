@@ -74,7 +74,7 @@ def test_non_manifest_json_block_ignored():
 
 
 def test_emits_only_local_nodes_in_order(tmp_path):
-    written = ptn.emit(ptn.extract_manifest(PLAN), tmp_path)
+    written, _ = ptn.emit(ptn.extract_manifest(PLAN), tmp_path)
     assert written == ["01-compact-path.json", "02-cli-entry.json"]
     create = json.loads((tmp_path / "02-cli-entry.json").read_text())
     assert create["kind"] == "create"
@@ -128,7 +128,7 @@ def test_run_json_ok_envelope_matches_emit(tmp_path):
     assert out["status"] == "ok"
     nodes = out["body"]["nodes"]
     # Same filenames/order as emit(), and each node byte-identical to the written file.
-    written = ptn.emit(ptn.extract_manifest(PLAN), tmp_path)
+    written, _ = ptn.emit(ptn.extract_manifest(PLAN), tmp_path)
     assert [n["filename"] for n in nodes] == written
     for n in nodes:
         assert n["node"] == json.loads((tmp_path / n["filename"]).read_text())
@@ -340,7 +340,7 @@ REAL_ID_SHAPES = [
 
 @pytest.mark.parametrize("good_id", REAL_ID_SHAPES)
 def test_rc1_real_production_ids_still_valid(good_id, tmp_path):
-    written = ptn.emit([_entry(id=good_id)], tmp_path / "out")
+    written, _ = ptn.emit([_entry(id=good_id)], tmp_path / "out")
     assert written == [f"01-{good_id}.json"]
 
 
@@ -367,8 +367,94 @@ def test_rc1_files_tilde_rejected(bad_file, tmp_path):
 @pytest.mark.parametrize("ok_file", ["./~/x", "backup~", "src/~notexpanded", "a~b/c.py"])
 def test_rc1_files_non_expanding_tilde_still_allowed(ok_file, tmp_path):
     """Only a LEADING tilde expands. Rejecting the rest would break real filenames."""
-    written = ptn.emit([_entry(files=[ok_file])], tmp_path)
+    written, _ = ptn.emit([_entry(files=[ok_file])], tmp_path)
     assert len(written) == 1
+
+
+# ── slicr#5: a re-plan does not leave the previous plan's nodes behind ──────────
+#
+# The executor globs the output directory, so a node file that survives a re-plan is a node
+# that runs. The assertion is on the DIRECTORY, not on the return value: what an executor
+# sees is the filesystem, and a `pruned` list that agreed with a directory still holding the
+# files would be exactly the defect.
+
+
+def _manifest(*ids):
+    return [
+        {"id": i, "files": [f"{i}.py"], "change": "c", "accept": "true", "local": True} for i in ids
+    ]
+
+
+def _node_files(out):
+    return sorted(p.name for p in out.iterdir())
+
+
+def test_replanning_shorter_removes_the_dropped_nodes(tmp_path):
+    out = tmp_path / "out"
+    ptn.emit(_manifest("a", "b", "c"), out)
+    assert _node_files(out) == ["01-a.json", "02-b.json", "03-c.json"]
+    written, pruned = ptn.emit(_manifest("a"), out)
+    assert written == ["01-a.json"]
+    assert _node_files(out) == ["01-a.json"], "a dropped node still on disk is a node that runs"
+    assert pruned == ["02-b.json", "03-c.json"]
+
+
+def test_replanning_with_renamed_ids_removes_the_old_names(tmp_path):
+    # Numbering is positional, so a rename writes 01-<new>.json and leaves 01-<old>.json —
+    # two files claiming the same slot, and the executor runs both.
+    out = tmp_path / "out"
+    ptn.emit(_manifest("old-name"), out)
+    ptn.emit(_manifest("new-name"), out)
+    assert _node_files(out) == ["01-new-name.json"]
+
+
+def test_prune_leaves_everything_that_is_not_a_node_file(tmp_path):
+    """The bound on a delete. Anything the script did not write is not the script's to
+    remove — an executor's own state in the same directory is the case that would hurt."""
+    out = tmp_path / "out"
+    out.mkdir()
+    keepers = [
+        "README.md",
+        "results.json",
+        "state",
+        "1-a.txt",
+        "node-01.json",
+        ".hidden",
+        # The two that pin fullmatch over search: both CONTAIN a node-shaped name.
+        "notes-01-a.json",
+        "01-a.json.bak",
+    ]
+    for name in keepers:
+        (out / name).write_text("x")
+    (out / "sub").mkdir()
+    (out / "sub" / "02-nested.json").write_text("x")  # not a direct child
+    (out / "03-dir.json").mkdir()  # matches the name shape but is not a file
+    ptn.emit(_manifest("a"), out)
+    assert _node_files(out) == sorted([*keepers, "01-a.json", "sub", "03-dir.json"])
+    assert (out / "sub" / "02-nested.json").exists(), "pruning must not walk into subdirectories"
+
+
+def test_a_manifest_that_does_not_validate_deletes_nothing(tmp_path):
+    """Validation runs before the directory is touched. Deleting the previous run's output
+    on the way to raising would turn a rejected re-plan into a lost one."""
+    out = tmp_path / "out"
+    ptn.emit(_manifest("a", "b"), out)
+    with pytest.raises(ValueError):
+        ptn.emit([{"id": "x", "files": ["a.py"], "local": True}], out)  # no change/accept
+    assert _node_files(out) == ["01-a.json", "02-b.json"]
+
+
+def test_a_manifest_with_no_local_nodes_still_clears_the_directory(tmp_path):
+    # 0 local nodes is a real answer, not "nothing to do" — leaving the old ones behind
+    # would run a plan the operator explicitly stopped offloading.
+    out = tmp_path / "out"
+    ptn.emit(_manifest("a", "b"), out)
+    written, pruned = ptn.emit(
+        [{"id": "x", "files": ["a.py"], "change": "c", "accept": "true", "local": False}], out
+    )
+    assert written == []
+    assert _node_files(out) == []
+    assert pruned == ["01-a.json", "02-b.json"]
 
 
 # ── slicr#3 + #10, through the front doors ─────────────────────────────────────
