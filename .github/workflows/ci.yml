@@ -25,6 +25,27 @@ jobs:
         run: ruff format --check .
       - name: test (validator + schema consistency)
         run: python3 -m pytest test_plan_to_nodes.py test_schema.py -q
+      # Running the suite must not modify a tracked file. Three `__pycache__/*.pyc` were
+      # tracked, so it did — and the fix stays fixed only if something notices when a
+      # generated artifact is committed again (slicr#15). This runs AFTER the suite on
+      # purpose: it is the suite's own side effects that are being checked.
+      - name: the suite leaves the working tree clean
+        run: |
+          dirty="$(git status --porcelain)"
+          if [ -n "$dirty" ]; then
+            echo "::error::running the tests modified tracked files — a generated artifact is committed:"
+            printf '%s\n' "$dirty"
+            exit 1
+          fi
+          # Belt and braces: the specific class that caused this, named so the failure is
+          # legible even if the artifact is committed without ever being regenerated here.
+          tracked="$(git ls-files | grep -E '\.py[cod]$' || true)"
+          if [ -n "$tracked" ]; then
+            echo "::error::compiled bytecode is tracked:"
+            printf '%s\n' "$tracked"
+            exit 1
+          fi
+          echo "working tree clean after the suite; no bytecode tracked"
 
   image:
     name: docker-build-and-smoke
