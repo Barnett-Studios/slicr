@@ -2,6 +2,8 @@
 import importlib.util
 import json
 import pathlib
+import subprocess
+import sys
 
 spec = importlib.util.spec_from_file_location(
     "plan_to_nodes", pathlib.Path(__file__).parent / "plan_to_nodes.py"
@@ -132,24 +134,101 @@ def test_run_json_ok_envelope_matches_emit(tmp_path):
         assert n["node"] == json.loads((tmp_path / n["filename"]).read_text())
 
 
-def test_run_json_invalid_json_is_error_envelope():
+def test_run_json_invalid_json_is_rejected_envelope():
     out = json.loads(ptn.run_json("not json"))
-    assert out["status"] == "error"
+    assert out["status"] == "rejected"
 
 
-def test_run_json_bad_manifest_is_error_envelope():
+def test_run_json_bad_manifest_is_rejected_envelope():
     bad_plan = (
         '```json\n{"execution-manifest": '
         '[{"id": "x", "files": ["a.py"], "local": true}]}\n```'  # no change/accept
     )
     out = json.loads(ptn.run_json(json.dumps({"plan_text": bad_plan})))
-    assert out["status"] == "error"
+    assert out["status"] == "rejected"
 
 
 def test_run_json_no_manifest_is_ok_with_zero_nodes():
     out = json.loads(ptn.run_json(json.dumps({"plan_text": "# plain plan"})))
     assert out["status"] == "ok"
     assert out["body"]["nodes"] == []
+
+
+# ── slicr#3 + #10: the three outcomes are distinguishable ───────────────────────
+#
+# One subject: slicr saying which of its states it is in. #3 is the CLI/extraction half
+# (malformed manifest read as absent), #10 the envelope half (a refusal read as a failure).
+
+MALFORMED = """# Plan
+
+```json
+{ "execution-manifest": [
+  {"id": "a", "files": ["x.py"], "change": "c", "accept": "true", "local": true},
+] }
+```
+"""
+
+
+def test_malformed_manifest_raises_rather_than_reading_as_absent():
+    """slicr#3. `[]` here is the defect itself: absent and unusable are different facts."""
+    with pytest.raises(ptn.ManifestRefused, match="not valid JSON"):
+        ptn.extract_manifest(MALFORMED)
+
+
+def test_malformed_manifest_names_its_line():
+    with pytest.raises(ptn.ManifestRefused, match="line 4"):
+        ptn.extract_manifest(MALFORMED)
+
+
+def test_manifest_key_holding_a_non_list_is_refused():
+    """The same silent-degradation shape one type over: parses, key present, not a list."""
+    with pytest.raises(ptn.ManifestRefused, match="dict"):
+        ptn.extract_manifest('```json\n{"execution-manifest": {"a": 1}}\n```')
+
+
+def test_malformed_block_without_the_key_is_still_skipped():
+    """The control. Broadening the refusal to every unparseable block would hard-fail any
+    plan that quotes malformed JSON in prose — a worse outage than the silence it fixes."""
+    plan = '```json\n{"foo": [1,]}\n```\n```json\n{"execution-manifest": []}\n```'
+    assert ptn.extract_manifest(plan) == []
+
+
+def test_run_json_malformed_manifest_is_rejected_not_ok():
+    """The worse half of slicr#3, unmentioned in the ticket: run-json answered `ok` with
+    zero nodes, so the consumer recorded a successful zero-offload rather than a failure."""
+    out = json.loads(ptn.run_json(json.dumps({"plan_text": MALFORMED})))
+    assert out["status"] == "rejected"
+    assert "line 4" in out["body"]["message"]
+
+
+def test_refusal_and_failure_are_distinguishable_without_reading_the_message():
+    """slicr#10's acceptance criterion, asserted as the pair. Either status alone passes
+    while the other is misfiled; only the inequality pins that they are two states."""
+    refused = json.loads(ptn.run_json(json.dumps({"plan_text": MALFORMED})))
+    failed = json.loads(ptn._error_envelope("boom"))
+    assert refused["status"] == "rejected"
+    assert failed["status"] == "error"
+    assert refused["status"] != failed["status"]
+
+
+def test_every_validate_entry_refusal_is_rejected():
+    """Enumerated from validate_entry's own raise sites (the specification side), not from
+    whichever refusals happened to be handy — a sample would pass while a whole arm of the
+    validator still emitted `error`."""
+    bad_entries = [
+        {"id": "x", "files": ["a.py"], "local": True},  # missing key
+        {"id": "../evil", "files": ["a.py"], "change": "c", "accept": "true"},  # non-slug id
+        {"id": "x", "files": ["/etc/passwd"], "change": "c", "accept": "true"},  # unsafe file
+        {"id": "x", "files": ["a.py"], "change": "c", "accept": "true", "forbid": ["net"]},
+        {"id": "x", "files": ["a.py"], "change": "c", "accept": "true", "kind": "conjure"},
+        {"id": "x", "files": ["a.py", "b.py"], "change": "c", "accept": "true", "kind": "create"},
+        {"id": "x", "files": ["a.py"], "change": "c", "accept": "true", "local": "yes"},
+    ]
+    for e in bad_entries:
+        plan = "```json\n" + json.dumps({"execution-manifest": [e]}) + "\n```"
+        out = json.loads(ptn.run_json(json.dumps({"plan_text": plan})))
+        assert out["status"] == "rejected", f"{e} produced {out}"
+        assert out["body"]["message"].startswith("bad_manifest: "), out
 
 
 # ── RC-1: node identity is a path-safe slug (slicr#4, ADR-0056) ─────────────────
@@ -290,6 +369,54 @@ def test_rc1_files_non_expanding_tilde_still_allowed(ok_file, tmp_path):
     """Only a LEADING tilde expands. Rejecting the rest would break real filenames."""
     written = ptn.emit([_entry(files=[ok_file])], tmp_path)
     assert len(written) == 1
+
+
+# ── slicr#3 + #10, through the front doors ─────────────────────────────────────
+#
+# The library-level tests above pin the functions. These run the script, because the
+# defect was in what each front door DID with the answer: the same `[]` meant "nothing to
+# do, exit 0" on one and "successful zero-offload" on the other.
+
+SCRIPT = str(pathlib.Path(__file__).parent / "plan_to_nodes.py")
+
+
+def _run(args, stdin=""):
+    return subprocess.run(
+        [sys.executable, SCRIPT, *args],
+        input=stdin,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_cli_malformed_manifest_exits_nonzero(tmp_path):
+    plan = tmp_path / "plan.md"
+    plan.write_text(MALFORMED)
+    r = _run([str(plan), str(tmp_path / "out")])
+    assert r.returncode != 0, r.stdout
+    assert "FAILURE(bad_manifest)" in r.stdout
+    assert str(plan) in r.stdout  # the ticket asks for path + message
+
+
+def test_cli_no_manifest_still_falls_back_gracefully(tmp_path):
+    plan = tmp_path / "plan.md"
+    plan.write_text("# plain plan, no manifest\n")
+    out = tmp_path / "out"
+    r = _run([str(plan), str(out)])
+    assert r.returncode == 0, r.stderr
+    assert "no execution-manifest found" in r.stdout
+    assert not out.exists() or list(out.glob("*.json")) == []
+
+
+def test_run_json_internal_failure_still_emits_an_error_envelope():
+    """slicr#10's second criterion, and the only producer of `error`. A non-string
+    plan_text used to escape as a traceback with NO envelope at all — a consumer told to
+    branch on `status` got empty stdout and nothing to branch on."""
+    r = _run(["run-json"], stdin=json.dumps({"plan_text": 42}))
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert out["status"] == "error"
+    assert out["body"]["message"].startswith("internal failure: TypeError")
 
 
 def test_rc1_tilde_would_have_escaped_the_repo():

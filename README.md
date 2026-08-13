@@ -21,9 +21,9 @@ acceptance test authored up front.
 - [`schema/execution-manifest.schema.json`](schema/execution-manifest.schema.json) — the owned
   contract (JSON Schema 2020-12). This is what makes the plan → execute seam swappable.
 - [`plan_to_nodes.py`](plan_to_nodes.py) — the deterministic, zero-token reference producer/validator:
-  plan → validated `NN-<id>.json` nodes for your executor. Fail-open on a missing/malformed manifest.
-- `test_plan_to_nodes.py`, `test_schema.py` — the validator's behavior + schema↔validator consistency
-  (14 tests).
+  plan → validated `NN-<id>.json` nodes for your executor. Fail-open on a *missing* manifest;
+  a malformed one is refused, not read as missing.
+- `test_plan_to_nodes.py`, `test_schema.py` — the validator's behavior + schema↔validator consistency.
 
 The planning *procedure* itself — how you prompt a model to produce the manifest, and how you
 validate the plan before decomposing it — lives in your harness as a skill or prompt. slicr owns
@@ -53,9 +53,13 @@ loop invokes it):
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/work ghcr.io/barnett-studios/slicr plan.md nodes/
 ```
 
-A missing or malformed manifest is **not** an error — `plan_to_nodes.py` emits nothing and the
-executor falls back to plain single-model execution. A *structurally bad* manifest (unknown `forbid`, a `create`
-node with multiple files, a missing required key) is a hard failure.
+A **missing** manifest is not an error — `plan_to_nodes.py` emits nothing, exits 0, and the executor
+falls back to plain single-model execution. A **refused** manifest — one that will not parse, or that
+parses into a structurally bad entry (unknown `forbid`, a `create` node with multiple files, a
+missing required key) — is a hard failure: exit 1, or `status: "rejected"` under `run-json`.
+
+Malformed used to be folded into missing, so one JSON typo produced "no execution-manifest found"
+and exit 0, and the operator recorded a zero-node offload that was really a parse error (slicr#3).
 
 ## The discipline it encodes
 

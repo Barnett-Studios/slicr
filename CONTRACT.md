@@ -50,9 +50,39 @@ and every write additionally resolves under the output directory before it happe
 not `normpath` — a symlink planted inside the output directory must not be a way out).
 
 A manifest that tries to escape the output directory is **rejected loudly** (`ValueError` →
-`FAILURE(bad_manifest)` / exit 1, or an `error` envelope in `run-json`); it is not sanitized into
+`FAILURE(bad_manifest)` / exit 1, or a `rejected` envelope in `run-json`); it is not sanitized into
 something writable, because silently renaming a node changes its identity and makes the emitted
 files disagree with the manifest that produced them.
+
+## Three outcomes, and why they are three
+
+| Outcome | CLI | `run-json` | What the consumer must do |
+|---|---|---|---|
+| No manifest in the plan | exit 0, `no execution-manifest found` | `ok`, `nodes: []` | fall back to plain execution |
+| Manifest **refused** | exit 1, `FAILURE(bad_manifest): <path>: <detail>` | `rejected` | **fail** |
+| slicr **failed** | traceback, exit ≠ 0 | `error` | fall open |
+
+The middle row is the one that did not exist. A refusal was reported as `error` (slicr#10) and a
+manifest that would not *parse* was reported as absent (slicr#3) — so a consumer obeying the
+ADR-0052 "fall open on any status != ok" rule silently re-ran a **refused** manifest on its own
+in-tree planner, and one JSON typo produced a benign 0-node success. A guard that falls open past
+its own verdict is not a guard: the input was judged, and running it somewhere else is a bypass.
+
+`rejected` and `error` differ in **who failed**, not in who wrote the input. An unparseable
+`run-json` *request* is therefore `rejected` too: slicr judged it and declined. The consumer that
+emitted it is a program, and one that falls open past its own malformed request never learns it
+emits one.
+
+`error` has exactly one producer — a catch-all around `run_json` in `main()`. Before it, an
+unexpected exception escaped as a traceback and **no envelope at all**, so a consumer told to
+branch on `status` got empty stdout and nothing to branch on.
+
+**Refused, specifically:** a fenced block that declares `"execution-manifest"` and will not parse,
+or whose value is not a list, plus every `validate_entry` rejection. A fenced block that does *not*
+declare the key is still skipped silently whatever its contents — refusing every unparseable block
+would hard-fail any plan that quotes malformed JSON in prose, a worse outage than the silence it
+fixes. The residual is the mirror image: a plan whose prose *does* quote a broken manifest block
+verbatim is now refused. That is the deliberate direction — loud over silent.
 
 ## Granularity discipline (why single-region nodes)
 
@@ -67,8 +97,9 @@ plan-validation on a fresh, separate context, not the author).
 
 [`plan_to_nodes.py`](plan_to_nodes.py) is the deterministic, zero-token bridge: it extracts the
 manifest from a plan, validates every entry, and emits `NN-<id>.json` for the `local:true` entries in
-order. **Fail-open:** a missing/malformed manifest emits nothing and the executor falls back to plain
-single-model execution (exit 0, 0 nodes); a *structurally bad* manifest is a hard `FAILURE(bad_manifest)` (exit 1).
+order. **Fail-open on absence:** a plan with no manifest emits nothing and the executor falls back to
+plain single-model execution (exit 0, 0 nodes). A manifest that is present and unusable — unparseable
+or structurally bad — is a hard `FAILURE(bad_manifest)` (exit 1), per the table above.
 
 The reference validator enforces the schema's **type** rules too (`id`/`accept` non-empty strings,
 `change` a string, `files` items strings, `local` a boolean) — so a manifest the validator accepts is
