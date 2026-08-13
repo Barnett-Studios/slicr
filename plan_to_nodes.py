@@ -142,6 +142,8 @@ def validate_entry(e, idx):
             )
     if "local" in e and not isinstance(e["local"], bool):
         raise ValueError(f"entry {idx} ({e['id']}): 'local' must be a boolean")
+    if "base_state" in e:
+        validate_base_state(e["base_state"], idx, e["id"])
     kind = e.get("kind", "edit")
     if kind not in ALLOWED_KIND:
         raise ValueError(f"entry {idx} ({e['id']}): kind '{kind}' not in {sorted(ALLOWED_KIND)}")
@@ -152,12 +154,55 @@ def validate_entry(e, idx):
         raise ValueError(f"entry {idx} ({e['id']}): unknown forbid tokens {sorted(bad)}")
 
 
+def validate_base_state(bs, idx, node_id):
+    """The optional binding to the repository state the entry was planned against (slicr#8).
+
+    A node says what to change and how correctness is demonstrated, never which tree it was
+    written for — so one planned against tree A can be applied to tree B, the accept still
+    passes, and nothing notices. Rare while plan→execute is one fast round trip; likely the
+    moment execution is queued, retried, or fanned out across providers.
+
+    Validated, not interpreted. What an executor does on a mismatch is policy and belongs to
+    the consumer; slicr's job is that the field cannot arrive meaningless.
+
+    An empty object is refused for the reason a whole class of guards in this family fails: a
+    consumer asking "does base_state match?" answers yes to a binding that binds nothing, and
+    reports a check as passed that never ran.
+
+    Neither value is pattern-checked. "A 40-hex sha" is false for an abbreviated rev and for a
+    sha256 repository, and rejecting a producer's legitimate value is a worse failure than
+    accepting a malformed one an executor will simply fail to match.
+    """
+    if not isinstance(bs, dict):
+        raise ValueError(f"entry {idx} ({node_id}): 'base_state' must be an object")
+    unknown = sorted(set(bs) - {"git_commit", "tree_hash"})
+    if unknown:
+        raise ValueError(
+            f"entry {idx} ({node_id}): 'base_state' has unknown key(s) {unknown} "
+            "(git_commit, tree_hash)"
+        )
+    if not bs:
+        raise ValueError(
+            f"entry {idx} ({node_id}): 'base_state' is empty — a binding to no state is "
+            "not a binding, and a consumer checking it would pass vacuously"
+        )
+    for key, val in bs.items():
+        if not isinstance(val, str) or not val:
+            raise ValueError(
+                f"entry {idx} ({node_id}): 'base_state.{key}' must be a non-empty string"
+            )
+
+
 def to_node(e):
     node = {"id": e["id"], "files": e["files"], "change": e["change"], "accept": e["accept"]}
     if e.get("forbid"):
         node["forbid"] = e["forbid"]
     if e.get("kind", "edit") != "edit":
         node["kind"] = e["kind"]
+    if e.get("base_state"):
+        # Reaches the NODE, not just the manifest: the node file is what an executor opens,
+        # and a binding that stayed behind in the manifest is one no consumer can act on.
+        node["base_state"] = e["base_state"]
     return node
 
 

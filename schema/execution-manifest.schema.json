@@ -40,10 +40,10 @@
             "type": "string",
             "minLength": 1,
             "pattern": "^[^~/]",
-            "description": "A repo-relative editable path. The pattern enforces the two rules a lookahead-free regex engine can express \u2014 no leading '/' and no leading '~' (which expanduser and shell tilde expansion resolve outside the repo). 'No .. component' still cannot be expressed here: it needs a negative lookahead, which the Rust regex crate does not support, so the reference validator remains authoritative. A producer trusting the schema alone can still emit a '..' path."
+            "description": "A repo-relative editable path. The pattern enforces the two rules a lookahead-free regex engine can express — no leading '/' and no leading '~' (which expanduser and shell tilde expansion resolve outside the repo). 'No .. component' still cannot be expressed here: it needs a negative lookahead, which the Rust regex crate does not support, so the reference validator remains authoritative. A producer trusting the schema alone can still emit a '..' path."
           },
           "minItems": 1,
-          "description": "Editable files the node may change. Must be relative paths inside the repo: no leading '/', no '..' component. Enforced by the reference validator rather than by a pattern here \u2014 expressing 'no .. component' needs negative lookahead, which the Rust regex engine used elsewhere in this family does not support, and an unenforceable-by-some-consumers pattern is worse than a documented rule."
+          "description": "Editable files the node may change. Must be relative paths inside the repo: no leading '/', no '..' component. Enforced by the reference validator rather than by a pattern here — expressing 'no .. component' needs negative lookahead, which the Rust regex engine used elsewhere in this family does not support, and an unenforceable-by-some-consumers pattern is worse than a documented rule."
         },
         "change": {
           "type": "string",
@@ -76,6 +76,24 @@
           "type": "boolean",
           "default": false,
           "description": "Offload to an executor as a node. Only local:true entries become nodes; local:false is executed inline by the planning model."
+        },
+        "base_state": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "git_commit": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Commit the plan was authored against."
+            },
+            "tree_hash": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Hash of the tree the plan was authored against."
+            }
+          },
+          "description": "Optional. The repository state this entry was planned against, so an executor can tell a node applied to the tree it was written for from one applied to a tree that has moved under it. Neither key is pattern-constrained: 'a 40-hex sha' is false for an abbreviated rev and for a sha256 repository, and a producer whose legitimate value the schema rejects is a worse failure than a malformed one it accepts. minProperties: 1 — an empty object is a binding that binds nothing, and a consumer checking 'does base_state match' would pass it vacuously. What an executor DOES on a mismatch is policy and lives in the consumer, deliberately not here."
         }
       },
       "allOf": [

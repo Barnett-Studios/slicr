@@ -40,6 +40,30 @@ Per entry:
 | `kind` | | `edit` (default) \| `create` |
 | `forbid` | | subset of `{new_deps}` |
 | `local` | | `true` → offload to an executor as a node; `false` (default) → executed inline by the planning model |
+| `base_state` | | `{git_commit?, tree_hash?}` — the repository state this entry was planned against. At least one key; both are non-empty strings |
+
+### `base_state` — validated here, enforced by the consumer
+
+A node says *what* to change and *how correctness is demonstrated*, never *which tree it was
+written for*. So a node planned against tree A can be applied to tree B, the accept still passes,
+and nothing notices — stale IR with a green oracle. Rare while plan→execute is one fast round
+trip; likely the moment execution is queued, retried, or fanned out across providers.
+
+The field is **optional and additive**: a manifest written before it existed still validates, and
+an executor that ignores it behaves exactly as before. Validity for a consumer that does honour it
+is a conjunct, never an equivalence — *base_state matches the tree at apply time* **and** *the
+accept passes*. Matching the tree is necessary and never sufficient.
+
+What an executor does on a mismatch — refuse, re-plan, warn — is **policy and lives in the
+consumer**. slicr's job ends at the field not being able to arrive meaningless:
+
+- An **empty** `base_state` is rejected. A binding to no state is not a binding, and a consumer
+  asking "does base_state match?" would answer yes to it — a check reported as passed that never
+  ran.
+- Values are **not** pattern-constrained. "A 40-hex sha" is false for an abbreviated rev and for a
+  sha256 repository; refusing a producer's legitimate value is a worse failure than accepting a
+  malformed one an executor will simply fail to match.
+- It reaches the emitted **node**, not just the manifest. The node file is what an executor opens.
 
 ## The manifest is untrusted input
 
