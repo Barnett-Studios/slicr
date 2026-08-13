@@ -101,6 +101,19 @@ order. **Fail-open on absence:** a plan with no manifest emits nothing and the e
 plain single-model execution (exit 0, 0 nodes). A manifest that is present and unusable — unparseable
 or structurally bad — is a hard `FAILURE(bad_manifest)` (exit 1), per the table above.
 
+**The output directory is slicr's to keep current.** `emit` deletes the node files a previous
+run left behind and the new manifest no longer contains, and names them on stdout. An executor
+globs that directory, so a node the plan dropped or renamed is a node that still *runs* — a
+shorter re-plan silently executed the tail of the old one (slicr#5). The delete is bounded to
+direct children whose names match the `NN-<id>.json` shape emit itself writes: a README, a log,
+or an executor's own state file in the same directory is not slicr's to remove. Validation runs
+before the directory is touched at all, so a re-plan that is *rejected* leaves the previous run
+exactly as it was rather than losing it on the way to raising.
+
+`run-json` has no output directory — the consumer writes `body.nodes` itself — so **that
+consumer owns the same obligation**: the node set is the whole answer, not an addition to
+whatever is already on disk.
+
 The reference validator enforces the schema's **type** rules too (`id`/`accept` non-empty strings,
 `change` a string, `files` items strings, `local` a boolean) — so a manifest the validator accepts is
 never rejected by an independent schema-validating consumer on a type mismatch. The **sole** remaining
