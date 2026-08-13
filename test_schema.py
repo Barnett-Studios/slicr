@@ -75,8 +75,19 @@ BAD_STATE_CASES = [
 
 BAD_CASES = [
     *(
-        (name, [{"id": "x", "files": ["a.py"], "change": "c", "accept": "true",
-                 "local": True, "base_state": bs}])
+        (
+            name,
+            [
+                {
+                    "id": "x",
+                    "files": ["a.py"],
+                    "change": "c",
+                    "accept": "true",
+                    "local": True,
+                    "base_state": bs,
+                }
+            ],
+        )
         for name, bs in BAD_STATE_CASES
     ),
     (
