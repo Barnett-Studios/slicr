@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
 """plan_to_nodes.py — extract the execution-manifest from a plan file and emit
-node JSON for run_nodes.py. Deterministic, zero-token. Missing/malformed
-manifest -> emit nothing (graceful fallback to plain single-model execution)."""
+node JSON for run_nodes.py. Deterministic, zero-token.
+
+Three outcomes, deliberately distinguishable (slicr#3, slicr#10):
+
+  * no manifest       -> emit nothing, exit 0 / `ok` with 0 nodes. Graceful fallback
+                         to plain single-model execution; the plan never asked for one.
+  * manifest refused  -> exit 1 / `rejected`. slicr did its job and the answer is "this
+                         input is not usable". A consumer must FAIL, not fall open —
+                         falling open past a refusal reruns the rejected input elsewhere,
+                         which is a bypass of the guard that just fired.
+  * slicr failed      -> `error`. Nothing was learned about the input; fall open.
+
+"Malformed" used to be folded into the first bucket, so one JSON typo in a plan produced
+a benign message, a success exit, and zero offloaded nodes — indistinguishable from a plan
+that never had a manifest."""
 
 import json
 import re
@@ -30,17 +43,52 @@ ID_MAX_LEN = 100
 # its bare closing ``` is), so the manifest block never gets captured. `[^\n]*` stays on the
 # fence line; each block is still filtered by the json.loads + execution-manifest check below.
 FENCE_RE = re.compile(r"```[^\n]*\n(.*?)\n```", re.DOTALL)
+# The discriminator between "a block that was MEANT to be a manifest" and "some other
+# code block". It has to be a substring test on the raw text: a block that will not parse
+# cannot be inspected for the key structurally, which is the whole reason the malformed
+# case was indistinguishable from the absent one. Quoted, so it matches the JSON key and
+# not prose mentioning the word.
+MANIFEST_KEY = '"execution-manifest"'
+
+
+class ManifestRefused(ValueError):
+    """The plan carried something meant to be a manifest, and it is not usable.
+
+    Distinct from "no manifest here", which is not an error at all. Subclasses ValueError
+    so every existing `except ValueError` around this module still catches it — the new
+    class narrows a refusal, it does not open a hole in an old handler.
+    """
 
 
 def extract_manifest(text):
-    """Return the execution-manifest list, or [] if none found/parseable."""
+    """Return the execution-manifest list, or [] if the plan carries no manifest.
+
+    Raises ManifestRefused if a fenced block declares `execution-manifest` but will not
+    parse, or parses to something that is not a list. A malformed block that does NOT
+    declare the key is still skipped silently — an unrelated broken JSON snippet in a plan
+    document is not slicr's business.
+    """
     for m in FENCE_RE.finditer(text):
+        block = m.group(1)
+        declares_manifest = MANIFEST_KEY in block
+        line = text.count("\n", 0, m.start(1)) + 1
         try:
-            data = json.loads(m.group(1))
-        except ValueError:
+            data = json.loads(block)
+        except ValueError as e:
+            if declares_manifest:
+                raise ManifestRefused(
+                    f"bad_manifest: fenced block at line {line} declares "
+                    f"{MANIFEST_KEY} but is not valid JSON: {e}"
+                ) from e
             continue
-        if isinstance(data, dict) and isinstance(data.get("execution-manifest"), list):
-            return data["execution-manifest"]
+        if isinstance(data, dict) and "execution-manifest" in data:
+            value = data["execution-manifest"]
+            if not isinstance(value, list):
+                raise ManifestRefused(
+                    f"bad_manifest: fenced block at line {line} declares "
+                    f"{MANIFEST_KEY} as {type(value).__name__} — must be a list"
+                )
+            return value
     return []
 
 
@@ -164,23 +212,45 @@ def emit(manifest, out_dir):
 def run_json(request_text):
     """ADR-0052 response-envelope mode: a JSON request `{plan_text}` in, a
     `{schema_version, status, body}` envelope string out. body.nodes is the ordered
-    [{filename, node}] list a consumer writes verbatim — byte-identical to emit()."""
+    [{filename, node}] list a consumer writes verbatim — byte-identical to emit().
+
+    Every failure here is slicr judging its input and declining, so every one is
+    `rejected`. That includes an unparseable *request*: the caller is a program, and a
+    consumer that falls open past its own malformed request never learns it emits one.
+    `error` is reserved for slicr failing at its job, which by construction cannot be
+    raised from inside this function — see main()."""
     try:
         req = json.loads(request_text)
     except ValueError as e:
-        return _error_envelope(f"invalid run request JSON: {e}")
+        return _rejected_envelope(f"invalid run request JSON: {e}")
     plan_text = req.get("plan_text", "")
-    manifest = extract_manifest(plan_text)
     try:
-        nodes = compute_nodes(manifest)
+        # extract_manifest inside the try: a manifest that will not parse is a refusal,
+        # the same class of answer as one that parses into an invalid entry.
+        nodes = compute_nodes(extract_manifest(plan_text))
+    except ManifestRefused as e:
+        return _rejected_envelope(str(e))
     except ValueError as e:
-        return _error_envelope(f"bad_manifest: {e}")
+        # The `bad_manifest:` prefix is load-bearing: consumers predating `rejected`
+        # pattern-match it to tell a refusal from a failure (dotclaude#37). It stays until
+        # they are all on the status.
+        return _rejected_envelope(f"bad_manifest: {e}")
     body = {"nodes": [{"filename": fname, "node": node} for fname, node in nodes]}
     return json.dumps({"schema_version": "1", "status": "ok", "body": body})
 
 
+def _envelope(status, body):
+    return json.dumps({"schema_version": "1", "status": status, "body": body})
+
+
+def _rejected_envelope(message):
+    """slicr evaluated the input and declined it. The consumer must fail, not fall open."""
+    return _envelope("rejected", {"message": message})
+
+
 def _error_envelope(message):
-    return json.dumps({"schema_version": "1", "status": "error", "body": {"message": message}})
+    """slicr failed at its own job. Nothing was learned about the input — fall open."""
+    return _envelope("error", {"message": message})
 
 
 def main():
@@ -188,14 +258,31 @@ def main():
     # exit 0 — the decision, including a bad manifest, is in the envelope) consumed by
     # the framework's execute-plan wrapper via `docker run`.
     if len(sys.argv) == 2 and sys.argv[1] == "run-json":
-        print(run_json(sys.stdin.read()))
+        try:
+            out = run_json(sys.stdin.read())
+        except Exception as e:  # noqa: BLE001 — the envelope IS this surface's error channel
+            # The only producer of `error`. Without it an unexpected exception escapes as a
+            # traceback and NO envelope, which ADR-0052 cannot classify at all: the consumer
+            # sees empty stdout and a non-zero exit, and the status it is told to branch on
+            # was never emitted.
+            out = _error_envelope(f"internal failure: {type(e).__name__}: {e}")
+        print(out)
         sys.exit(0)
 
     if len(sys.argv) != 3:
         print("usage: plan_to_nodes.py <plan.md> <out-dir>   |   plan_to_nodes.py run-json")
         sys.exit(2)
     text = Path(sys.argv[1]).read_text()
-    manifest = extract_manifest(text)
+    try:
+        manifest = extract_manifest(text)
+    except ManifestRefused as e:
+        # Same FAILURE(bad_manifest) shape the emit path below already uses — a refused
+        # manifest is one outcome, not two, whichever stage of the read noticed it. The
+        # prefix lives in the exception message for the envelope's sake; strip it here so
+        # it appears exactly once.
+        detail = str(e).removeprefix("bad_manifest: ")
+        print(f"FAILURE(bad_manifest): {sys.argv[1]}: {detail}")
+        sys.exit(1)
     if not manifest:
         print("no execution-manifest found — falling back to plain execution (0 nodes)")
         sys.exit(0)
