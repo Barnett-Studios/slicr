@@ -65,7 +65,31 @@ GOOD = [
     },
 ]
 
+BAD_STATE_CASES = [
+    ("base_state_empty", {}),
+    ("base_state_not_object", "abc123"),
+    ("base_state_unknown_key", {"git_commit": "abc", "branch": "main"}),
+    ("base_state_empty_value", {"git_commit": ""}),
+    ("base_state_non_string_value", {"tree_hash": 12345}),
+]
+
 BAD_CASES = [
+    *(
+        (
+            name,
+            [
+                {
+                    "id": "x",
+                    "files": ["a.py"],
+                    "change": "c",
+                    "accept": "true",
+                    "local": True,
+                    "base_state": bs,
+                }
+            ],
+        )
+        for name, bs in BAD_STATE_CASES
+    ),
     (
         "unknown_forbid",
         [
@@ -161,3 +185,50 @@ def test_rc1_schema_and_validator_agree_on_unsafe_id(bad_id, tmp_path):
     assert not schema_ok([_entry(id=bad_id)])
     with pytest.raises(ValueError):
         ptn.validate_entry(_entry(id=bad_id), 0)
+
+
+# ── slicr#8: the optional binding to the tree an entry was planned against ─────
+
+
+def test_base_state_is_optional_on_both_sides(tmp_path):
+    """Absent is not an error. The whole point of an additive field is that every
+    manifest written before it existed keeps validating."""
+    plain = [_entry()]
+    assert schema_ok(plain)
+    assert validator_ok(plain, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "bs",
+    [
+        {"git_commit": "9f8e7d6"},
+        {"tree_hash": "b" * 64},
+        {"git_commit": "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c", "tree_hash": "b" * 64},
+    ],
+)
+def test_base_state_accepted_by_both(bs, tmp_path):
+    entries = [_entry(base_state=bs)]
+    assert schema_ok(entries), f"schema rejected {bs}"
+    assert validator_ok(entries, tmp_path), f"reference validator rejected {bs}"
+
+
+def test_base_state_values_are_not_pattern_constrained():
+    """An abbreviated rev and a sha256-repository commit are both legitimate, and a
+    40-hex pattern rejects both. A contract that refuses a producer's real value fails
+    worse than one that accepts a value the executor will simply fail to match."""
+    assert schema_ok([_entry(base_state={"git_commit": "9f8e7d6"})])
+    assert schema_ok([_entry(base_state={"git_commit": "c" * 64})])
+
+
+def test_base_state_reaches_the_emitted_node(tmp_path):
+    """The node file is what an executor opens. A binding that validated in the manifest
+    and stayed there is one no consumer can act on — which is the same as not having it."""
+    bs = {"git_commit": "abc123", "tree_hash": "d" * 64}
+    ptn.emit([_entry(id="bound", base_state=bs), _entry(id="unbound")], tmp_path)
+    bound = json.loads((tmp_path / "01-bound.json").read_text())
+    unbound = json.loads((tmp_path / "02-unbound.json").read_text())
+    assert bound["base_state"] == bs
+    assert "base_state" not in unbound, (
+        "an entry that declared no binding must not gain an empty one — an executor "
+        "cannot tell a vacuous binding from an absent one"
+    )
