@@ -17,6 +17,7 @@ a benign message, a success exit, and zero offloaded nodes — indistinguishable
 that never had a manifest."""
 
 import json
+import os
 import re
 import sys
 from pathlib import Path, PurePosixPath
@@ -238,10 +239,32 @@ def _safe_target(out, fname):
     if PurePosixPath(fname).is_absolute() or ".." in PurePosixPath(fname).parts:
         raise ValueError(f"unsafe node filename {fname!r} (absolute or contains '..') — refused")
     out_resolved = out.resolve()
-    target = (out_resolved / fname).resolve()
+    candidate = out_resolved / fname
+    target = candidate.resolve()
     if out_resolved not in target.parents:
         raise ValueError(
             f"node filename {fname!r} resolves to {target}, outside {out_resolved} — refused"
+        )
+    # Containment is not enough (slicr#20). A symlink AT the node path resolving to something
+    # else INSIDE `out` passes the test above, and `write_text` then follows it — so slicr
+    # overwrote a file it did not write (`results.json`, the executor state) while reporting
+    # that it wrote the node. Nothing in the containment check distinguishes "the node file
+    # from last run" from "a symlink someone planted".
+    #
+    # Refused rather than unlinked-and-replaced: slicr only ever writes regular files here, so
+    # a symlink at a node path is never something this tool produced, and silently repairing it
+    # would destroy the one piece of evidence that it was there.
+    #
+    # `is_symlink()` does not follow the final component, which is the whole point — `exists()`
+    # and `resolve()` both do.
+    if candidate.is_symlink():
+        raise ValueError(
+            f"node path {fname!r} is a symlink to {os.readlink(candidate)} — refused; "
+            f"slicr writes its own node files and will not follow one planted at the node path"
+        )
+    if candidate.exists() and not candidate.is_file():
+        raise ValueError(
+            f"node path {fname!r} exists and is not a regular file — refused"
         )
     return target
 
@@ -281,9 +304,15 @@ def emit(manifest, out_dir):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     written = [fname for fname, _ in nodes]
+    # EVERY target resolved and checked before anything is deleted or written. `_safe_target`
+    # used to run inside the write loop, after `prune_stale_nodes` had already unlinked — so a
+    # refusal deleted the previous run's nodes, wrote nothing, and exited 1, which is precisely
+    # the "losing it on the way to raising" the docstring above promises against (slicr#20).
+    # `compute_nodes` is not the only thing that raises.
+    targets = [(fname, _safe_target(out, fname), node) for fname, node in nodes]
     pruned = prune_stale_nodes(out, set(written))
-    for fname, node in nodes:
-        _safe_target(out, fname).write_text(json.dumps(node, indent=1))
+    for _fname, target, node in targets:
+        target.write_text(json.dumps(node, indent=1))
     return written, pruned
 
 
