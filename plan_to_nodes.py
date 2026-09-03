@@ -263,9 +263,7 @@ def _safe_target(out, fname):
             f"slicr writes its own node files and will not follow one planted at the node path"
         )
     if candidate.exists() and not candidate.is_file():
-        raise ValueError(
-            f"node path {fname!r} exists and is not a regular file — refused"
-        )
+        raise ValueError(f"node path {fname!r} exists and is not a regular file — refused")
     return target
 
 
