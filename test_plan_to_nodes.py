@@ -511,3 +511,114 @@ def test_rc1_tilde_would_have_escaped_the_repo():
 
     assert os.path.isabs(os.path.expanduser("~/.ssh/authorized_keys"))
     assert not os.path.isabs(os.path.expanduser("./~/x")), "control: this one is inert"
+
+
+# ── slicr#20 — a symlink AT the node path, resolving INSIDE out ─────────────────
+#
+# `_safe_target` refused a node path resolving OUTSIDE `out`, and that guard holds. It did not
+# refuse one that is itself a symlink resolving to something else INSIDE `out`, so `write_text`
+# followed it and slicr overwrote a file it did not write while reporting that it wrote the node.
+#
+# `test_rc1_symlink_in_out_dir_cannot_escape` above plants the symlink as a DIRECTORY COMPONENT
+# and asserts only the escaping arm; the leaf is never itself a symlink, which is why the suite
+# never saw this.
+
+
+def _manifest_one_local_node():
+    # A manifest is a LIST of entries, and `change` is required. My first draft omitted both
+    # and `compute_nodes` raised on the manifest instead of on the directory state — which made
+    # `test_emit_validates_every_target_before_it_deletes_anything` pass for entirely the wrong
+    # reason, since compute_nodes already runs before the prune.
+    return [
+        {
+            "id": "alpha",
+            "files": ["src/a.py"],
+            "change": "c",
+            "accept": "true",
+            "local": True,
+        }
+    ]
+
+
+def test_a_symlink_at_the_node_path_is_refused_not_followed(tmp_path):
+    """Arm C: exit 0, a success line, and the executor-state file silently overwritten."""
+    out = tmp_path / "out"
+    out.mkdir()
+    victim = out / "results.json"
+    victim.write_text("EXECUTOR STATE")
+    (out / "01-alpha.json").symlink_to(victim)
+
+    with pytest.raises(ValueError) as e:
+        ptn._safe_target(out, "01-alpha.json")
+
+    assert "symlink" in str(e.value).lower(), f"the refusal must name what it found: {e.value}"
+    assert victim.read_text() == "EXECUTOR STATE", "the victim must be untouched"
+    assert (out / "01-alpha.json").is_symlink(), "nothing here should rewrite the link itself"
+
+
+def test_the_control_an_ordinary_pre_existing_node_file_is_still_overwritten(tmp_path):
+    """Non-vacuous: a REGULAR file left by the previous run is what slicr is meant to replace.
+
+    Without this, 'refuse a planted node path' is satisfied by refusing every re-run.
+    """
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "01-alpha.json").write_text("last run")
+    target = ptn._safe_target(out, "01-alpha.json")
+    target.write_text("this run")
+    assert (out / "01-alpha.json").read_text() == "this run"
+
+
+def test_emit_validates_every_target_before_it_deletes_anything(tmp_path):
+    """Arm B: the prune ran, then the write raised, so the previous plan's output was deleted
+    and nothing replaced it.
+
+    CONTRACT.md:133 — 'Validation runs before the directory is touched at all, so a re-plan that
+    is rejected leaves the previous run exactly as it was rather than losing it on the way to
+    raising.' `compute_nodes` is not the only thing that raises.
+    """
+    out = tmp_path / "out"
+    out.mkdir()
+    stale_a = out / "08-stale.json"
+    stale_b = out / "09-stale.json"
+    stale_a.write_text("{}")
+    stale_b.write_text("{}")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    # In `keep` (it is the node about to be written), so prune_stale_nodes will not remove it.
+    (out / "01-alpha.json").symlink_to(outside / "escaped.json")
+
+    with pytest.raises(ValueError):
+        ptn.emit(_manifest_one_local_node(), out)
+
+    assert stale_a.exists(), "a rejected run must not delete the previous run's nodes"
+    assert stale_b.exists(), "a rejected run must not delete the previous run's nodes"
+    assert not (outside / "escaped.json").exists(), "nothing may be written outside out"
+
+
+def test_control_emit_still_prunes_and_writes_on_a_good_run(tmp_path):
+    """The control for the one above: hoisting validation must not stop the prune happening."""
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "08-stale.json").write_text("{}")
+    written, pruned = ptn.emit(_manifest_one_local_node(), out)
+    assert written == ["01-alpha.json"], written
+    assert "08-stale.json" in pruned, pruned
+    assert not (out / "08-stale.json").exists()
+    assert (out / "01-alpha.json").is_file()
+
+
+def test_a_directory_at_the_node_path_is_refused_not_written_into(tmp_path):
+    """The sibling of the symlink case, found by mutation rather than by reasoning.
+
+    A directory sitting at the node path is not something slicr wrote either, and `write_text`
+    on it raises IsADirectoryError from inside the write loop — after the prune, which is the
+    same 'lost on the way to raising' shape. Refusing during validation keeps it with the other
+    checks, where nothing has been deleted yet.
+    """
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "01-alpha.json").mkdir()
+    with pytest.raises(ValueError) as e:
+        ptn._safe_target(out, "01-alpha.json")
+    assert "regular file" in str(e.value), f"the refusal must say what it found: {e.value}"

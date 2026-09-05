@@ -73,6 +73,13 @@ charset forbids every path separator and a leading dot, making `..` and `.` *unr
 and every write additionally resolves under the output directory before it happens (`resolve()`,
 not `normpath` — a symlink planted inside the output directory must not be a way out).
 
+Containment is necessary and not sufficient. A symlink **at** a node path resolving to something
+else **inside** the output directory passes that test, and following it means overwriting a file
+slicr did not write while reporting that it wrote the node (slicr#20). So a node path that is
+already a symlink, or already anything other than a regular file, is **refused** rather than
+followed or silently replaced: slicr only ever writes regular files there, so such a path is
+never something it produced, and repairing it quietly would destroy the evidence that it existed.
+
 A manifest that tries to escape the output directory is **rejected loudly** (`ValueError` →
 `FAILURE(bad_manifest)` / exit 1, or a `rejected` envelope in `run-json`); it is not sanitized into
 something writable, because silently renaming a node changes its identity and makes the emitted
@@ -132,7 +139,10 @@ shorter re-plan silently executed the tail of the old one (slicr#5). The delete 
 direct children whose names match the `NN-<id>.json` shape emit itself writes: a README, a log,
 or an executor's own state file in the same directory is not slicr's to remove. Validation runs
 before the directory is touched at all, so a re-plan that is *rejected* leaves the previous run
-exactly as it was rather than losing it on the way to raising.
+exactly as it was rather than losing it on the way to raising. **Every** output path is resolved
+and checked before the prune, not as each write happens — `compute_nodes` is not the only thing
+that raises, and a refusal discovered mid-write used to delete the previous run's nodes on its
+way out (slicr#20).
 
 `run-json` has no output directory — the consumer writes `body.nodes` itself — so **that
 consumer owns the same obligation**: the node set is the whole answer, not an addition to
