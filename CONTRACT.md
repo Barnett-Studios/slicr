@@ -13,7 +13,11 @@ way to answer that.
 
 Under the 0.x convention the **minor** is the breaking position: a change to this component's
 request/response contract or CLI surface is a minor bump, and behaviour-preserving fixes are
-patches. The version in `VERSION`, the git tag, and the published ghcr image tag are the same
+patches. Those two do not partition the space, and a fix that lands between them takes the
+**minor**: a change that makes a previously-succeeding input fail is not behaviour-preserving,
+so calling it a patch would assert a preservation that did not happen. `0.3.0` is the first
+release decided this way — slicr#20 refuses a symlink at a node path where `0.2.0` wrote
+through it, which no caller should have relied on and every caller can observe. The version in `VERSION`, the git tag, and the published ghcr image tag are the same
 number by construction — dotclaude#63 is what a drift between those looks like.
 
 ## The execution-manifest schema (the owned contract)
