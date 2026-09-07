@@ -42,6 +42,37 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+      # CONTRACT.md states that VERSION, the git tag and the published image tag are the same
+      # number "by construction". Nothing constructed it: neither workflow read VERSION, so a
+      # tag cut over a tree whose VERSION says something else published an image whose in-tree
+      # version disagreed with the tag serving it — and with `latest`. No step failed, no
+      # output mentioned it (#27). Measured when this was written: VERSION 0.3.0, newest tag
+      # v0.2.0, newest release v0.1.3. Three numbers for one thing.
+      #
+      # This compares against `steps.meta.outputs.version` — the value metadata-action
+      # resolved and the SAME one the push below tags with — not a hand-stripped
+      # `github.ref_name`. dotclaude#63 is what the other way looks like: a guard that
+      # stripped the `v` itself compared matching numbers while the push used the raw tag, so
+      # the guard and the push disagreed about what "the version" was and both passed.
+      #
+      # It runs BEFORE the build so a mismatch costs a failed workflow, not a published image
+      # that has to be un-published.
+      - name: VERSION must agree with the reference being published
+        env:
+          RESOLVED: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -r VERSION || { echo "::error::VERSION is missing or unreadable"; exit 1; }
+          file="$(tr -d '[:space:]' < VERSION)"
+          test -n "$file" || { echo "::error::VERSION is empty"; exit 1; }
+          test -n "$RESOLVED" || { echo "::error::metadata-action resolved no version"; exit 1; }
+          if [ "$file" != "$RESOLVED" ]; then
+            echo "::error::VERSION says '$file' but this release publishes '$RESOLVED'."
+            echo "::error::CONTRACT.md states these agree by construction. Bump VERSION, or re-tag."
+            exit 1
+          fi
+          echo "VERSION $file agrees with the reference being published ($RESOLVED)"
+
       - name: Build and push multi-arch image
         id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6

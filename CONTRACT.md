@@ -20,6 +20,13 @@ release decided this way — slicr#20 refuses a symlink at a node path where `0.
 through it, which no caller should have relied on and every caller can observe. The version in `VERSION`, the git tag, and the published ghcr image tag are the same
 number by construction — dotclaude#63 is what a drift between those looks like.
 
+**"By construction" now names a mechanism.** It did not until slicr#27: neither workflow read
+`VERSION`, so this paragraph asserted a property nothing enforced, and the repo drifted three
+ways at once (`VERSION` 0.3.0, newest tag `v0.2.0`, newest release `v0.1.3`). The release
+workflow now compares `VERSION` against the reference `docker/metadata-action` resolved — the
+same value the push tags with, not a separately-stripped `github.ref_name` — and refuses before
+building. A mismatch costs a failed workflow rather than a published image to un-publish.
+
 ## The execution-manifest schema (the owned contract)
 
 Canonical, machine-checkable: [`schema/execution-manifest.schema.json`](schema/execution-manifest.schema.json)
