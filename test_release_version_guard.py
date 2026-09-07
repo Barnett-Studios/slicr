@@ -7,6 +7,7 @@ the guard honest rather than to keep the workflow parsing.
 The shell body is read OUT of the workflow rather than copied here. A copy would pass while the
 workflow drifted — which is the failure this whole issue is about.
 """
+
 import os
 import pathlib
 import subprocess
@@ -30,7 +31,10 @@ def run_guard(version_file, resolved):
         if version_file is not None:
             pathlib.Path(d, "VERSION").write_text(version_file)
         return subprocess.run(
-            ["bash", "-c", guard_body()], cwd=d, capture_output=True, text=True,
+            ["bash", "-c", guard_body()],
+            cwd=d,
+            capture_output=True,
+            text=True,
             env={**os.environ, "RESOLVED": resolved},
         ).returncode
 
