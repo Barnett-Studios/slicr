@@ -115,6 +115,13 @@ its own verdict is not a guard: the input was judged, and running it somewhere e
 emitted it is a program, and one that falls open past its own malformed request never learns it
 emits one.
 
+A request with no `plan_text` key is the same class of caller bug (slicr#19): it used to collapse
+into the first row's `ok, nodes: []` — the fail-open signal this table's own first row defines —
+which told a consumer the *plan* carried no manifest when in fact the *request* never carried a
+plan at all. It is now `rejected`, naming the missing field. An explicitly-supplied empty string
+(`plan_text: ""`) is a different, real statement about a real input and keeps the first row's
+answer.
+
 `error` has exactly one producer — a catch-all around `run_json` in `main()`. Before it, an
 unexpected exception escaped as a traceback and **no envelope at all**, so a consumer told to
 branch on `status` got empty stdout and nothing to branch on.

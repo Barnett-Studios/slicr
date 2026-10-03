@@ -154,6 +154,23 @@ def test_run_json_no_manifest_is_ok_with_zero_nodes():
     assert out["body"]["nodes"] == []
 
 
+# slicr#19: a request with no plan_text key and a plan that genuinely carries no
+# manifest must NOT produce the same envelope — the former is a caller bug (the same
+# class as unparseable JSON), the latter a real statement about a real plan.
+def test_run_json_missing_plan_text_key_is_rejected_not_ok():
+    out = json.loads(ptn.run_json(json.dumps({})))
+    assert out["status"] == "rejected"
+    assert "plan_text" in out["body"]["message"]
+
+
+def test_run_json_empty_plan_text_string_keeps_the_ok_fail_open_behaviour():
+    # The control: an EXPLICITLY-supplied empty string is a different, real input
+    # ("here is the plan, it is empty") from an absent key, and keeps today's answer.
+    out = json.loads(ptn.run_json(json.dumps({"plan_text": ""})))
+    assert out["status"] == "ok"
+    assert out["body"]["nodes"] == []
+
+
 # ── slicr#3 + #10: the three outcomes are distinguishable ───────────────────────
 #
 # One subject: slicr saying which of its states it is in. #3 is the CLI/extraction half
