@@ -122,8 +122,12 @@ def validate_entry(e, idx):
         raise ValueError(f"entry {idx} ({e['id']}): 'accept' must be a non-empty string")
     if not isinstance(e["files"], list) or not e["files"]:
         raise ValueError(f"entry {idx} ({e['id']}): 'files' must be a non-empty list")
-    if not all(isinstance(f, str) for f in e["files"]):
-        raise ValueError(f"entry {idx} ({e['id']}): 'files' entries must all be strings")
+    # slicr#18: the schema's `files.items.minLength: 1` had no validator check — an
+    # all-strings test accepted `['']`, and `to_node` copies `files` through unchanged,
+    # so the node's editable path became the empty string (`os.path.join(repo, "")` is
+    # the repo directory itself).
+    if not all(isinstance(f, str) and f for f in e["files"]):
+        raise ValueError(f"entry {idx} ({e['id']}): 'files' entries must all be non-empty strings")
     for f in e["files"]:
         # `files` are the editable paths an executor will write. Absolute or
         # escaping entries are out of contract regardless of which executor
@@ -150,7 +154,21 @@ def validate_entry(e, idx):
         raise ValueError(f"entry {idx} ({e['id']}): kind '{kind}' not in {sorted(ALLOWED_KIND)}")
     if kind == "create" and len(e["files"]) != 1:
         raise ValueError(f"entry {idx} ({e['id']}): create node must list exactly one file")
-    bad = set(e.get("forbid", [])) - ALLOWED_FORBID
+    # slicr#18: `set(e.get("forbid", []))` accepts any iterable, so the shape was never
+    # examined before this ran — a dict contributed its keys (and `to_node` copies the
+    # dict through unchanged: the node's `forbid` ends up a `dict` where the contract
+    # says "subset of {new_deps}"), and a duplicated list just collapsed in the set.
+    fb = e.get("forbid", [])
+    if not isinstance(fb, list):
+        raise ValueError(f"entry {idx} ({e['id']}): 'forbid' must be a list")
+    # Checked before the set-based duplicate/membership tests below, which would
+    # otherwise raise an unhandled TypeError on an unhashable entry (e.g. `[["x"]]`)
+    # instead of the same clean ValueError every other shape mismatch here gets.
+    if not all(isinstance(t, str) for t in fb):
+        raise ValueError(f"entry {idx} ({e['id']}): 'forbid' entries must all be strings")
+    if len(fb) != len(set(fb)):
+        raise ValueError(f"entry {idx} ({e['id']}): 'forbid' has duplicate tokens")
+    bad = set(fb) - ALLOWED_FORBID
     if bad:
         raise ValueError(f"entry {idx} ({e['id']}): unknown forbid tokens {sorted(bad)}")
 
