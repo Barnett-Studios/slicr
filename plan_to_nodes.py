@@ -328,7 +328,16 @@ def run_json(request_text):
         req = json.loads(request_text)
     except ValueError as e:
         return _rejected_envelope(f"invalid run request JSON: {e}")
-    plan_text = req.get("plan_text", "")
+    # slicr#19: a request with no `plan_text` key is a caller bug, the same class as
+    # unparseable JSON above — not a plan that genuinely carries no manifest. Collapsing
+    # the two via `.get("plan_text", "")` answered "ok, zero nodes", which is this
+    # module's own documented fail-open signal (README.md/CONTRACT.md): the executor
+    # falls back to plain single-model execution with nothing saying a plan was dropped.
+    # An explicitly-supplied empty string is a different, real statement about a real
+    # input ("here is the plan, it is empty") and keeps today's behaviour.
+    if "plan_text" not in req:
+        return _rejected_envelope("request is missing required field 'plan_text'")
+    plan_text = req["plan_text"]
     try:
         # extract_manifest inside the try: a manifest that will not parse is a refusal,
         # the same class of answer as one that parses into an invalid entry.
