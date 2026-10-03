@@ -103,6 +103,37 @@ BAD_CASES = [
             }
         ],
     ),
+    # slicr#18: the three schema constraints that had no BAD_CASE and no validator
+    # check — `files.items.minLength`, `forbid.uniqueItems`, `forbid.type: array`.
+    # Each used to reach the emitted node unchanged; see CONTRACT.md.
+    (
+        "empty_files_item",
+        [{"id": "x", "files": [""], "change": "c", "accept": "true"}],
+    ),
+    (
+        "forbid_duplicate",
+        [
+            {
+                "id": "x",
+                "files": ["a.py"],
+                "change": "c",
+                "accept": "true",
+                "forbid": ["new_deps", "new_deps"],
+            }
+        ],
+    ),
+    (
+        "forbid_not_array",
+        [
+            {
+                "id": "x",
+                "files": ["a.py"],
+                "change": "c",
+                "accept": "true",
+                "forbid": {"new_deps": 1},
+            }
+        ],
+    ),
     (
         "create_multifile",
         [

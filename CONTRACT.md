@@ -167,11 +167,16 @@ consumer owns the same obligation**: the node set is the whole answer, not an ad
 whatever is already on disk.
 
 The reference validator enforces the schema's **type** rules too (`id`/`accept` non-empty strings,
-`change` a string, `files` items strings, `local` a boolean) — so a manifest the validator accepts is
-never rejected by an independent schema-validating consumer on a type mismatch. The **sole** remaining
-divergence is unknown entry keys: the validator ignores them, the schema is strict
-(`additionalProperties: false` on entries). `test_schema.py` proves the two agree on every shared
-good/bad case (including the type cases); the unknown-key case is the one deliberately not exercised.
+`change` a string, `files` items non-empty strings, `local` a boolean, `forbid` a list of unique
+strings) — so a manifest the validator accepts is never rejected by an independent
+schema-validating consumer on a type mismatch. slicr#18 closed three divergences this paragraph
+did not list (`files` items could be empty strings, `forbid` could be a non-list — a dict's keys
+satisfied the old `set()`-based check — and `forbid` could repeat a token), all three of which
+reached the emitted node unchanged because `to_node` only drops *unknown keys*, not a wrong shape
+on a known one. The **sole** remaining divergence is unknown entry keys: the validator ignores
+them, the schema is strict (`additionalProperties: false` on entries). `test_schema.py` proves
+the two agree on every shared good/bad case (including the type cases); the unknown-key case is
+the one deliberately not exercised.
 
 ## Swap-in
 
